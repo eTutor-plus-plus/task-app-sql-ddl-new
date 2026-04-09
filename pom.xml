@@ -11,11 +11,11 @@
     </parent>
 
     <groupId>at.jku.dke.etutor</groupId>
-    <artifactId>task-app-binary-search</artifactId>
+    <artifactId>task-app-sql-ddl</artifactId>
     <version>1.0.3</version>
 
-    <name>eTutor Task-App: Binary Search</name>
-    <description>eTutor Task-App for task type "binary-search"</description>
+    <name>eTutor Task-App: SQL DDL</name>
+    <description>eTutor Task-App for task type "sql-ddl"</description>
     <packaging>jar</packaging>
 
     <properties>
