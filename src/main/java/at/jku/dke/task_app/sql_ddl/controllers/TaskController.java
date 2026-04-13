@@ -24,7 +24,15 @@ public class TaskController extends BaseTaskController<SQLDDLTask, SQLDDLTaskDto
 
     @Override
     protected SQLDDLTaskDto mapToDto(SQLDDLTask task) {
-        return new SQLDDLTaskDto(task.getSolution());
+        return new SQLDDLTaskDto(
+            task.getSolution(),
+            task.getTablePoints(),
+            task.getPrimaryKeyPoints(),
+            task.getForeignKeyPoints(),
+            task.getConstraintPoints(),
+            task.getWhitelist(),
+            null
+        );
     }
 
 }

@@ -9,5 +9,12 @@ import java.io.Serializable;
  *
  * @param solution The solution.
  */
-public record SQLDDLTaskDto(@NotNull Integer solution) implements Serializable {
-}
+public record SQLDDLTaskDto(
+    @NotNull String solution,
+    @NotNull Integer tablePoints,
+    @NotNull Integer primaryKeyPoints,
+    @NotNull Integer foreignKeyPoints,
+    @NotNull Integer constraintPoints,
+    String whitelist,
+    String insertStatements
+) implements Serializable {}

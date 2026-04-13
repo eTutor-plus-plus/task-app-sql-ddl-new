@@ -1,10 +1,10 @@
-package at.jku.dke.task_app.sql_ddl.evaluation;
+package at.jku.dke.task_app.sql_ddl_new.evaluation;
 
 import at.jku.dke.etutor.task_app.dto.CriterionDto;
 import at.jku.dke.etutor.task_app.dto.GradingDto;
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
-import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
-import at.jku.dke.task_app.sql_ddl.dto.SQLDDLSubmissionDto;
+import at.jku.dke.task_app.sql_ddl_new.data.repositories.BinarySearchTaskRepository;
+import at.jku.dke.task_app.sql_ddl_new.dto.BinarySearchSubmissionDto;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,7 @@ import java.util.Locale;
 public class EvaluationService {
     private static final Logger LOG = LoggerFactory.getLogger(EvaluationService.class);
 
-    private final SQLDDLTaskRepository taskRepository;
+    private final BinarySearchTaskRepository taskRepository;
     private final MessageSource messageSource;
 
     /**
@@ -33,7 +33,7 @@ public class EvaluationService {
      * @param taskRepository The task repository.
      * @param messageSource  The message source.
      */
-    public EvaluationService(SQLDDLTaskRepository taskRepository, MessageSource messageSource) {
+    public EvaluationService(BinarySearchTaskRepository taskRepository, MessageSource messageSource) {
         this.taskRepository = taskRepository;
         this.messageSource = messageSource;
     }
@@ -45,7 +45,7 @@ public class EvaluationService {
      * @return The evaluation result.
      */
     @Transactional
-    public GradingDto evaluate(SubmitSubmissionDto<SQLDDLSubmissionDto> submission) {
+    public GradingDto evaluate(SubmitSubmissionDto<BinarySearchSubmissionDto> submission) {
         // find task
         var task = this.taskRepository.findById(submission.taskId()).orElseThrow(() -> new EntityNotFoundException("Task " + submission.taskId() + " does not exist."));
 
@@ -80,22 +80,14 @@ public class EvaluationService {
         }
 
         // evaluate and grade
-        Integer taskSolution = null;
-        NumberFormatException taskError = null;
-        try {
-            taskSolution = Integer.parseInt(task.getSolution());
-        } catch (NumberFormatException ex) {
-            taskError = ex;
-        }
-
         switch (submission.mode()) {
             case RUN:
                 feedback = this.messageSource.getMessage("input", new Object[]{submission.submission().input()}, locale);
                 break;
             case DIAGNOSE:
-                feedback = this.messageSource.getMessage(error == null && taskError == null && input.equals(taskSolution) ? "correct" : "incorrect", null, locale);
-                if (error == null && taskError == null) {
-                    int diff = taskSolution - input;
+                feedback = this.messageSource.getMessage(error == null && input.equals(task.getSolution()) ? "correct" : "incorrect", null, locale);
+                if (error == null) {
+                    int diff = task.getSolution() - input;
                     if (diff == 0)
                         points = task.getMaxPoints();
                     if (submission.feedbackLevel() > 0)
@@ -107,7 +99,7 @@ public class EvaluationService {
                 }
                 break;
             case SUBMIT:
-                if (error == null && taskError == null && input.equals(taskSolution)) {
+                if (error == null && input.equals(task.getSolution())) {
                     feedback = this.messageSource.getMessage("correct", null, locale);
                     points = task.getMaxPoints();
                 } else

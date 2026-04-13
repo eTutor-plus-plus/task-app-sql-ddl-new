@@ -7,17 +7,18 @@ CREATE CAST (CHARACTER VARYING as submission_mode) WITH INOUT AS IMPLICIT;
 
 CREATE TABLE task
 (
-    id            BIGINT        NOT NULL,
-    max_points    NUMERIC(7, 2) NOT NULL,
-    status        TASK_STATUS   NOT NULL,
-    solution      TEXT          NOT NULL, -- custom column
-    INSERT_STATEMENTS TEXT,
-    SCHEMA_NAME VARCHAR(50) NOT NULL UNIQUE,
-    TABLE_POINTS integer NOT NULL,
-    COLUMN_POINTS integer NOT NULL,
-    PRIMARYKEY_POINTS integer NOT NULL,
-    FOREIGNKEY_POINTS integer NOT NULL,
-    CONSTRAINT_POINTS integer NOT NULL,
+    id                BIGINT        NOT NULL,
+    max_points        NUMERIC(7, 2) NOT NULL,
+    status            TASK_STATUS   NOT NULL,
+    solution          TEXT          NOT NULL,
+    executed_solution JSONB         NOT NULL,
+    table_points      INT           NOT NULL,
+    primarykey_points INT           NOT NULL,
+    foreignkey_points INT           NOT NULL,
+    constraint_points INT           NOT NULL,
+    whitelist         TEXT          NOT NULL,
+    created           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT task_pk PRIMARY KEY (id)
 );
 
@@ -32,7 +33,7 @@ CREATE TABLE submission
     mode              submission_mode NOT NULL,
     feedback_level    INT             NOT NULL,
     evaluation_result JSONB,
-    submission        TEXT, -- custom column
+    submission        TEXT,
     CONSTRAINT submission_pk PRIMARY KEY (id),
     CONSTRAINT submission_task_fk FOREIGN KEY (task_id) REFERENCES task (id)
         ON DELETE CASCADE

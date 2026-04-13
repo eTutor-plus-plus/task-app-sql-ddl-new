@@ -1,81 +1,134 @@
 package at.jku.dke.task_app.sql_ddl.data.entities;
 
-import at.jku.dke.etutor.task_app.data.entities.BaseTaskInGroup;
+import at.jku.dke.etutor.task_app.data.entities.BaseTask;
 import at.jku.dke.etutor.task_app.dto.TaskStatus;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.math.BigDecimal;
 
-/**
- * Represents a SQL DDL task.
- */
 @Entity
 @Table(name = "task")
-public class SQLDDLTask extends BaseTaskInGroup<SQLDDLTaskGroup> {
+public class SQLDDLTask extends BaseTask {
     @NotNull
-    @Column(name = "solution", nullable = false)
-    private Integer solution;
+    @Column(name = "solution", nullable = false, columnDefinition = "text")
+    private String solution;
 
-    /**
-     * Creates a new instance of class {@link SQLDDLTask}.
-     */
+    @NotNull
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "executed_solution", nullable = false, columnDefinition = "jsonb")
+    private JsonNode executedSolution;
+
+    @NotNull
+    @Column(name = "table_points", nullable = false)
+    private Integer tablePoints;
+
+    @NotNull
+    @Column(name = "primarykey_points", nullable = false)
+    private Integer primaryKeyPoints;
+
+    @NotNull
+    @Column(name = "foreignkey_points", nullable = false)
+    private Integer foreignKeyPoints;
+
+    @NotNull
+    @Column(name = "constraint_points", nullable = false)
+    private Integer constraintPoints;
+
+    @NotNull
+    @Column(name = "whitelist", nullable = false, columnDefinition = "text")
+    private String whitelist;
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SQLDDLCheckConstraint> checkConstraints = new ArrayList<>();
+
+
     public SQLDDLTask() {
     }
 
-    /**
-     * Creates a new instance of class {@link SQLDDLTask}.
-     *
-     * @param solution The solution.
-     */
-    public SQLDDLTask(Integer solution) {
+    public SQLDDLTask(Long id, BigDecimal maxPoints, TaskStatus status, String solution, JsonNode executedSolution, Integer tablePoints, Integer primaryKeyPoints, Integer foreignKeyPoints, Integer constraintPoints, String whitelist, List<SQLDDLCheckConstraint> checkConstraints) {
+        super(id, maxPoints, status);
         this.solution = solution;
+        this.executedSolution = executedSolution;
+        this.tablePoints = tablePoints;
+        this.primaryKeyPoints = primaryKeyPoints;
+        this.foreignKeyPoints = foreignKeyPoints;
+        this.constraintPoints = constraintPoints;
+        this.whitelist = whitelist;
+        this.checkConstraints = checkConstraints;
     }
 
-    /**
-     * Creates a new instance of class {@link SQLDDLTask}.
-     *
-     * @param maxPoints The maximum points.
-     * @param status    The status.
-     * @param taskGroup The task group.
-     * @param solution  The solution.
-     */
-    public SQLDDLTask(BigDecimal maxPoints, TaskStatus status, SQLDDLTaskGroup taskGroup, Integer solution) {
-        super(maxPoints, status, taskGroup);
-        this.solution = solution;
-    }
-
-    /**
-     * Creates a new instance of class {@link SQLDDLTask}.
-     *
-     * @param id        The identifier.
-     * @param maxPoints The maximum points.
-     * @param status    The status.
-     * @param taskGroup The task group.
-     * @param solution  The solution.
-     */
-    public SQLDDLTask(Long id, BigDecimal maxPoints, TaskStatus status, SQLDDLTaskGroup taskGroup, Integer solution) {
-        super(id, maxPoints, status, taskGroup);
-        this.solution = solution;
-    }
-
-    /**
-     * Gets the solution.
-     *
-     * @return The solution.
-     */
-    public Integer getSolution() {
+    public String getSolution() {
         return solution;
     }
 
-    /**
-     * Sets the solution.
-     *
-     * @param solution The solution.
-     */
-    public void setSolution(Integer solution) {
+    public void setSolution(String solution) {
         this.solution = solution;
+    }
+
+    public JsonNode getExecutedSolution() {
+        return executedSolution;
+    }
+
+    public void setExecutedSolution(JsonNode executedSolution) {
+        this.executedSolution = executedSolution;
+    }
+
+    public Integer getTablePoints() {
+        return tablePoints;
+    }
+
+    public void setTablePoints(Integer tablePoints) {
+        this.tablePoints = tablePoints;
+    }
+
+    public Integer getPrimaryKeyPoints() {
+        return primaryKeyPoints;
+    }
+
+    public void setPrimaryKeyPoints(Integer primaryKeyPoints) {
+        this.primaryKeyPoints = primaryKeyPoints;
+    }
+
+    public Integer getForeignKeyPoints() {
+        return foreignKeyPoints;
+    }
+
+    public void setForeignKeyPoints(Integer foreignKeyPoints) {
+        this.foreignKeyPoints = foreignKeyPoints;
+    }
+
+    public Integer getConstraintPoints() {
+        return constraintPoints;
+    }
+
+    public void setConstraintPoints(Integer constraintPoints) {
+        this.constraintPoints = constraintPoints;
+    }
+
+    public String getWhitelist() {
+        return whitelist;
+    }
+
+    public void setWhitelist(String whitelist) {
+        this.whitelist = whitelist;
+    }
+
+    public List<SQLDDLCheckConstraint> getCheckConstraints() {
+        return checkConstraints;
+    }
+
+    public void setCheckConstraints(List<SQLDDLCheckConstraint> checkConstraints) {
+        this.checkConstraints = checkConstraints;
     }
 }
