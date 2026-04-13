@@ -19,8 +19,9 @@ import java.util.UUID;
 @Table(name = "check_constraint")
 public class SQLDDLCheckConstraint {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false, updatable = false)
-    private Long id;
+    private UUID id;
 
     @Column(name = "check_condition")
     private String checkCondition;
@@ -54,7 +55,7 @@ public class SQLDDLCheckConstraint {
         this.insertStatements = insertStatements;
     }
 
-    public Long getId() {
+    public UUID getId() {
         return id;
     }
 
