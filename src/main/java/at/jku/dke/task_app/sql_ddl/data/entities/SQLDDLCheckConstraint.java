@@ -23,17 +23,14 @@ public class SQLDDLCheckConstraint {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "check_condition")
-    private String checkCondition;
+    @Column(name = "check_definition")
+    private String checkDefinition;
 
-    @Column(name = "number_successful_statements")
-    private Integer numberSuccessfulStatements;
+    @Column(name = "successful_insert_statements")
+    private String successfulInsertStatements;
 
-    @Column(name = "number_unsuccessful_statements")
-    private Integer numberUnsuccessfulStatements;
-
-    @Column(name = "insert_statements", columnDefinition = "text")
-    private String insertStatements;
+    @Column(name = "unsuccessful_insert_statements", columnDefinition = "text")
+    private String unsuccessfulInsertStatements;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_id")
@@ -44,51 +41,45 @@ public class SQLDDLCheckConstraint {
     }
 
     public SQLDDLCheckConstraint(
-        String checkCondition,
-        Integer numberSuccessfulStatements,
-        Integer numberUnsuccessfulStatements,
-        String insertStatements
+        String checkDefinition,
+        String successfulInsertStatements,
+        String unsuccessfulInsertStatements
     ) {
-        this.checkCondition = checkCondition;
-        this.numberSuccessfulStatements = numberSuccessfulStatements;
-        this.numberUnsuccessfulStatements = numberUnsuccessfulStatements;
-        this.insertStatements = insertStatements;
+        this.checkDefinition = checkDefinition;
+        this.successfulInsertStatements = successfulInsertStatements;
+        this.unsuccessfulInsertStatements = unsuccessfulInsertStatements;
     }
 
     public UUID getId() {
         return id;
     }
 
-    public String getCheckCondition() {
-        return checkCondition;
+    public void setId(UUID id) {
+        this.id = id;
     }
 
-    public void setCheckCondition(String checkCondition) {
-        this.checkCondition = checkCondition;
+    public String getCheckDefinition() {
+        return checkDefinition;
     }
 
-    public Integer getNumberSuccessfulStatements() {
-        return numberSuccessfulStatements;
+    public void setCheckDefinition(String checkDefinition) {
+        this.checkDefinition = checkDefinition;
     }
 
-    public void setNumberSuccessfulStatements(Integer numberSuccessfulStatements) {
-        this.numberSuccessfulStatements = numberSuccessfulStatements;
+    public String getSuccessfulInsertStatements() {
+        return successfulInsertStatements;
     }
 
-    public Integer getNumberUnsuccessfulStatements() {
-        return numberUnsuccessfulStatements;
+    public void setSuccessfulInsertStatements(String successfulInsertStatements) {
+        this.successfulInsertStatements = successfulInsertStatements;
     }
 
-    public void setNumberUnsuccessfulStatements(Integer numberUnsuccessfulStatements) {
-        this.numberUnsuccessfulStatements = numberUnsuccessfulStatements;
+    public String getUnsuccessfulInsertStatements() {
+        return unsuccessfulInsertStatements;
     }
 
-    public String getInsertStatements() {
-        return insertStatements;
-    }
-
-    public void setInsertStatements(String insertStatements) {
-        this.insertStatements = insertStatements;
+    public void setUnsuccessfulInsertStatements(String unsuccessfulInsertStatements) {
+        this.unsuccessfulInsertStatements = unsuccessfulInsertStatements;
     }
 
     public SQLDDLTask getTask() {

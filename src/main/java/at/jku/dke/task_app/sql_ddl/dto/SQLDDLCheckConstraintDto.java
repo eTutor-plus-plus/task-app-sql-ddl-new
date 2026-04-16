@@ -7,10 +7,12 @@ import java.io.Serializable;
 /**
  * DTO for one check-constraint input row from the frontend.
  *
- * @param name The check constraint name/condition.
- * @param insertStatements The insert statements used for checking.
+ * @param checkDefinition The check constraint name.
+ * @param successfulStatements The insert statements which are successfully inserted into the table used for checking.
+ * @param unsuccessfulStatements The insert statements which are not successfully inserted into the table used for checking.
  */
 public record SQLDDLCheckConstraintDto(
-    @NotNull String name,
-    @NotNull String insertStatements
+    @NotNull String checkDefinition,
+    @NotNull String successfulStatements,
+    @NotNull String unsuccessfulStatements
 ) implements Serializable {}
