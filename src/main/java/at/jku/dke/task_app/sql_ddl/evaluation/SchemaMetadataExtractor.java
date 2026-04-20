@@ -10,9 +10,11 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class SchemaMetadataExtractor {
@@ -32,9 +34,10 @@ public class SchemaMetadataExtractor {
         }
 
         for (String tableName : tables) {
+            Set<String> foreignKeyColumns = extractForeignKeyColumns(metaData, schemaName, tableName);
             ObjectNode tableNode = tablesNode.addObject();
             tableNode.put("name", tableName);
-            tableNode.set("columns", extractColumns(metaData, schemaName, tableName));
+            tableNode.set("columns", extractColumns(metaData, schemaName, tableName, foreignKeyColumns));
             tableNode.set("primaryKey", extractPrimaryKey(metaData, schemaName, tableName));
             tableNode.set("foreignKeys", extractForeignKeys(metaData, schemaName, tableName));
             tableNode.set("uniqueConstraints", extractUniqueConstraints(metaData, schemaName, tableName));
@@ -43,12 +46,22 @@ public class SchemaMetadataExtractor {
         return schemaMetadata;
     }
 
-    private ArrayNode extractColumns(DatabaseMetaData metaData, String schemaName, String tableName) throws SQLException {
+    private ArrayNode extractColumns(
+        DatabaseMetaData metaData,
+        String schemaName,
+        String tableName,
+        Set<String> foreignKeyColumns
+    ) throws SQLException {
         ArrayNode columnsNode = JsonNodeFactory.instance.arrayNode();
         try (ResultSet rs = metaData.getColumns(null, schemaName, tableName, "%")) {
             while (rs.next()) {
+                String columnName = rs.getString("COLUMN_NAME");
+                if (columnName != null && foreignKeyColumns.contains(columnName)) {
+                    continue;
+                }
+
                 ObjectNode column = columnsNode.addObject();
-                column.put("name", rs.getString("COLUMN_NAME"));
+                column.put("name", columnName);
                 column.put("typeName", rs.getString("TYPE_NAME"));
                 column.put("size", rs.getInt("COLUMN_SIZE"));
                 column.put("decimalDigits", rs.getInt("DECIMAL_DIGITS"));
@@ -75,6 +88,19 @@ public class SchemaMetadataExtractor {
         ArrayNode columnNames = pkNode.putArray("columns");
         columns.forEach(columnNames::add);
         return pkNode;
+    }
+
+    private Set<String> extractForeignKeyColumns(DatabaseMetaData metaData, String schemaName, String tableName) throws SQLException {
+        Set<String> foreignKeyColumns = new HashSet<>();
+        try (ResultSet rs = metaData.getImportedKeys(null, schemaName, tableName)) {
+            while (rs.next()) {
+                String columnName = rs.getString("FKCOLUMN_NAME");
+                if (columnName != null) {
+                    foreignKeyColumns.add(columnName);
+                }
+            }
+        }
+        return foreignKeyColumns;
     }
 
     private ArrayNode extractForeignKeys(DatabaseMetaData metaData, String schemaName, String tableName) throws SQLException {
