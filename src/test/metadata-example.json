@@ -1,0 +1,281 @@
+{
+    "schema": "PUBLIC",
+    "tables": [
+        {
+            "name": "ABTEILUNG",
+            "columns": [
+                {
+                    "name": "ABTEILUNG_ID",
+                    "size": 32,
+                    "nullable": false,
+                    "typeName": "INTEGER",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 1
+                },
+                {
+                    "name": "NAME",
+                    "size": 100,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 2
+                },
+                {
+                    "name": "BUDGET",
+                    "size": 12,
+                    "nullable": true,
+                    "typeName": "DECIMAL",
+                    "decimalDigits": 2,
+                    "ordinalPosition": 3
+                }
+            ],
+            "primaryKey": {
+                "name": "CONSTRAINT_4",
+                "columns": [
+                    "ABTEILUNG_ID"
+                ]
+            },
+            "foreignKeys": [],
+            "uniqueConstraints": [
+                {
+                    "name": "CONSTRAINT_INDEX_4",
+                    "columns": [
+                        "NAME"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "MITARBEITER",
+            "columns": [
+                {
+                    "name": "MITARBEITER_ID",
+                    "size": 32,
+                    "nullable": false,
+                    "typeName": "INTEGER",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 1
+                },
+                {
+                    "name": "VORNAME",
+                    "size": 50,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 2
+                },
+                {
+                    "name": "NACHNAME",
+                    "size": 50,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 3
+                },
+                {
+                    "name": "EMAIL",
+                    "size": 150,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 4
+                },
+                {
+                    "name": "GEHALT",
+                    "size": 10,
+                    "nullable": false,
+                    "typeName": "DECIMAL",
+                    "decimalDigits": 2,
+                    "ordinalPosition": 5
+                },
+                {
+                    "name": "STATUS",
+                    "size": 20,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 6
+                },
+                {
+                    "name": "EINTRITTSDATUM",
+                    "size": 19,
+                    "nullable": false,
+                    "typeName": "TIMESTAMP",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 9
+                }
+            ],
+            "primaryKey": {
+                "name": "CONSTRAINT_D",
+                "columns": [
+                    "MITARBEITER_ID"
+                ]
+            },
+            "foreignKeys": [
+                {
+                    "name": "CONSTRAINT_DEA973",
+                    "column": "ABTEILUNG_ID",
+                    "deleteRule": "SET_NULL",
+                    "updateRule": "CASCADE",
+                    "referencedTable": "ABTEILUNG",
+                    "referencedColumn": "ABTEILUNG_ID"
+                },
+                {
+                    "name": "CONSTRAINT_DEA9738",
+                    "column": "MANAGER_ID",
+                    "deleteRule": "SET_NULL",
+                    "updateRule": "CASCADE",
+                    "referencedTable": "MITARBEITER",
+                    "referencedColumn": "MITARBEITER_ID"
+                }
+            ],
+            "uniqueConstraints": [
+                {
+                    "name": "CONSTRAINT_INDEX_D",
+                    "columns": [
+                        "EMAIL"
+                    ]
+                },
+                {
+                    "name": "CONSTRAINT_INDEX_DE",
+                    "columns": [
+                        "VORNAME",
+                        "NACHNAME",
+                        "EINTRITTSDATUM"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "MITARBEITER_PROJEKT",
+            "columns": [
+                {
+                    "name": "ROLLE",
+                    "size": 30,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 3
+                },
+                {
+                    "name": "STUNDEN_PRO_WOCHE",
+                    "size": 32,
+                    "nullable": false,
+                    "typeName": "INTEGER",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 4
+                }
+            ],
+            "primaryKey": {
+                "name": "CONSTRAINT_F",
+                "columns": [
+                    "MITARBEITER_ID",
+                    "PROJEKT_ID"
+                ]
+            },
+            "foreignKeys": [
+                {
+                    "name": "CONSTRAINT_FB",
+                    "column": "MITARBEITER_ID",
+                    "deleteRule": "CASCADE",
+                    "updateRule": "CASCADE",
+                    "referencedTable": "MITARBEITER",
+                    "referencedColumn": "MITARBEITER_ID"
+                },
+                {
+                    "name": "CONSTRAINT_FBB",
+                    "column": "PROJEKT_ID",
+                    "deleteRule": "CASCADE",
+                    "updateRule": "CASCADE",
+                    "referencedTable": "PROJEKT",
+                    "referencedColumn": "PROJEKT_ID"
+                }
+            ],
+            "uniqueConstraints": []
+        },
+        {
+            "name": "PROJEKT",
+            "columns": [
+                {
+                    "name": "PROJEKT_ID",
+                    "size": 32,
+                    "nullable": false,
+                    "typeName": "INTEGER",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 1
+                },
+                {
+                    "name": "CODE",
+                    "size": 20,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 2
+                },
+                {
+                    "name": "NAME",
+                    "size": 100,
+                    "nullable": false,
+                    "typeName": "CHARACTER VARYING",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 3
+                },
+                {
+                    "name": "STARTDATUM",
+                    "size": 19,
+                    "nullable": false,
+                    "typeName": "TIMESTAMP",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 4
+                },
+                {
+                    "name": "ENDDATUM",
+                    "size": 19,
+                    "nullable": true,
+                    "typeName": "TIMESTAMP",
+                    "decimalDigits": 0,
+                    "ordinalPosition": 5
+                },
+                {
+                    "name": "BUDGET",
+                    "size": 12,
+                    "nullable": false,
+                    "typeName": "DECIMAL",
+                    "decimalDigits": 2,
+                    "ordinalPosition": 6
+                }
+            ],
+            "primaryKey": {
+                "name": "CONSTRAINT_1",
+                "columns": [
+                    "PROJEKT_ID"
+                ]
+            },
+            "foreignKeys": [
+                {
+                    "name": "CONSTRAINT_185B",
+                    "column": "LEITER_ID",
+                    "deleteRule": "RESTRICT",
+                    "updateRule": "CASCADE",
+                    "referencedTable": "MITARBEITER",
+                    "referencedColumn": "MITARBEITER_ID"
+                }
+            ],
+            "uniqueConstraints": [
+                {
+                    "name": "CONSTRAINT_INDEX_18",
+                    "columns": [
+                        "NAME",
+                        "STARTDATUM"
+                    ]
+                },
+                {
+                    "name": "CONSTRAINT_INDEX_1",
+                    "columns": [
+                        "CODE"
+                    ]
+                }
+            ]
+        }
+    ]
+}

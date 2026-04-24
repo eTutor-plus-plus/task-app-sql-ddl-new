@@ -10,6 +10,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.TreeSet;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
@@ -121,6 +122,7 @@ public class SchemaMetadataExtractor {
 
     private ArrayNode extractUniqueConstraints(DatabaseMetaData metaData, String schemaName, String tableName) throws SQLException {
         Map<String, List<String>> uniqueConstraints = new HashMap<>();
+        Set<String> primaryKeyColumns = extractPrimaryKeyColumnSet(metaData, schemaName, tableName);
         try (ResultSet rs = metaData.getIndexInfo(null, schemaName, tableName, true, false)) {
             while (rs.next()) {
                 String indexName = rs.getString("INDEX_NAME");
@@ -137,12 +139,29 @@ public class SchemaMetadataExtractor {
 
         ArrayNode uniqueConstraintsNode = JsonNodeFactory.instance.arrayNode();
         uniqueConstraints.forEach((key, value) -> {
+            if (new TreeSet<>(value).equals(primaryKeyColumns)) {
+                return;
+            }
+
             ObjectNode uniqueConstraint = uniqueConstraintsNode.addObject();
             uniqueConstraint.put("name", key);
             ArrayNode columns = uniqueConstraint.putArray("columns");
             value.forEach(columns::add);
         });
         return uniqueConstraintsNode;
+    }
+
+    private Set<String> extractPrimaryKeyColumnSet(DatabaseMetaData metaData, String schemaName, String tableName) throws SQLException {
+        Set<String> primaryKeyColumns = new TreeSet<>();
+        try (ResultSet rs = metaData.getPrimaryKeys(null, schemaName, tableName)) {
+            while (rs.next()) {
+                String columnName = rs.getString("COLUMN_NAME");
+                if (columnName != null) {
+                    primaryKeyColumns.add(columnName);
+                }
+            }
+        }
+        return primaryKeyColumns;
     }
 
     private String fkRuleToText(short rule) {

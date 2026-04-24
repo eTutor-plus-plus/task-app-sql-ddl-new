@@ -6,8 +6,11 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -38,6 +41,98 @@ public class SchemaComparisonService {
         return extractUniqueConstraints(expectedSchema).equals(extractUniqueConstraints(actualSchema));
     }
 
+    public int countExpectedTables(JsonNode expectedSchema) {
+        return extractTablesWithColumns(expectedSchema).size();
+    }
+
+    public int countMatchingTables(JsonNode expectedSchema, JsonNode actualSchema) {
+        Map<String, Set<String>> expected = extractTablesWithColumns(expectedSchema);
+        Map<String, Set<String>> actual = extractTablesWithColumns(actualSchema);
+        int matches = 0;
+        for (Map.Entry<String, Set<String>> entry : expected.entrySet()) {
+            if (entry.getValue().equals(actual.get(entry.getKey()))) {
+                matches++;
+            }
+        }
+        return matches;
+    }
+
+    public int countExpectedPrimaryKeys(JsonNode expectedSchema) {
+        return extractPrimaryKeys(expectedSchema).size();
+    }
+
+    public int countMatchingPrimaryKeys(JsonNode expectedSchema, JsonNode actualSchema) {
+        Map<String, Set<String>> expected = extractPrimaryKeys(expectedSchema);
+        Map<String, Set<String>> actual = extractPrimaryKeys(actualSchema);
+        int matches = 0;
+        for (Map.Entry<String, Set<String>> entry : expected.entrySet()) {
+            if (entry.getValue().equals(actual.get(entry.getKey()))) {
+                matches++;
+            }
+        }
+        return matches;
+    }
+
+    public int countExpectedForeignKeys(JsonNode expectedSchema) {
+        return extractForeignKeys(expectedSchema).size();
+    }
+
+    public int countMatchingForeignKeys(JsonNode expectedSchema, JsonNode actualSchema) {
+        Set<String> expected = extractForeignKeys(expectedSchema);
+        Set<String> actual = extractForeignKeys(actualSchema);
+        int matches = 0;
+        for (String entry : expected) {
+            if (actual.contains(entry)) {
+                matches++;
+            }
+        }
+        return matches;
+    }
+
+    public int countExpectedUniqueConstraints(JsonNode expectedSchema) {
+        return extractUniqueConstraints(expectedSchema).values().stream().mapToInt(Set::size).sum();
+    }
+
+    public int countMatchingUniqueConstraints(JsonNode expectedSchema, JsonNode actualSchema) {
+        Map<String, Set<String>> expected = extractUniqueConstraints(expectedSchema);
+        Map<String, Set<String>> actual = extractUniqueConstraints(actualSchema);
+
+        int matches = 0;
+        for (Map.Entry<String, Set<String>> entry : expected.entrySet()) {
+            Set<String> actualValues = actual.getOrDefault(entry.getKey(), Set.of());
+            for (String value : entry.getValue()) {
+                if (actualValues.contains(value)) {
+                    matches++;
+                }
+            }
+        }
+        return matches;
+    }
+
+    public List<String> matchingTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return matchingKeys(extractTablesWithColumns(expectedSchema), extractTablesWithColumns(actualSchema));
+    }
+
+    public List<String> mismatchingTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return mismatchingKeys(extractTablesWithColumns(expectedSchema), extractTablesWithColumns(actualSchema));
+    }
+
+    public List<String> matchingPrimaryKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return matchingKeys(extractPrimaryKeys(expectedSchema), extractPrimaryKeys(actualSchema));
+    }
+
+    public List<String> mismatchingPrimaryKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return mismatchingKeys(extractPrimaryKeys(expectedSchema), extractPrimaryKeys(actualSchema));
+    }
+
+    public List<String> matchingForeignKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return matchingKeys(extractForeignKeysByTable(expectedSchema), extractForeignKeysByTable(actualSchema));
+    }
+
+    public List<String> mismatchingForeignKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
+        return mismatchingKeys(extractForeignKeysByTable(expectedSchema), extractForeignKeysByTable(actualSchema));
+    }
+
     private Map<String, Set<String>> extractTablesWithColumns(JsonNode schemaNode) {
         Map<String, Set<String>> result = new HashMap<>();
         for (JsonNode table : safeArray(schemaNode.path("tables"))) {
@@ -53,6 +148,25 @@ public class SchemaComparisonService {
                 columns.add(descriptor);
             }
             result.put(tableName, columns);
+        }
+        return result;
+    }
+
+    private Map<String, Set<String>> extractForeignKeysByTable(JsonNode schemaNode) {
+        Map<String, Set<String>> result = new HashMap<>();
+        for (JsonNode table : safeArray(schemaNode.path("tables"))) {
+            String tableName = table.path("name").asText("");
+            Set<String> descriptors = new TreeSet<>();
+            for (JsonNode fk : safeArray(table.path("foreignKeys"))) {
+                String descriptor = String.join("|",
+                    fk.path("column").asText(""),
+                    fk.path("referencedTable").asText(""),
+                    fk.path("referencedColumn").asText(""),
+                    fk.path("updateRule").asText(""),
+                    fk.path("deleteRule").asText(""));
+                descriptors.add(descriptor);
+            }
+            result.put(tableName, descriptors);
         }
         return result;
     }
@@ -110,5 +224,26 @@ public class SchemaComparisonService {
             return Collections.emptyList();
         }
         return () -> node.elements();
+    }
+
+    private List<String> matchingKeys(Map<String, Set<String>> expected, Map<String, Set<String>> actual) {
+        SortedMap<String, Set<String>> keys = collectKeys(expected, actual);
+        return keys.keySet().stream()
+            .filter(key -> expected.getOrDefault(key, Set.of()).equals(actual.getOrDefault(key, Set.of())))
+            .toList();
+    }
+
+    private List<String> mismatchingKeys(Map<String, Set<String>> expected, Map<String, Set<String>> actual) {
+        SortedMap<String, Set<String>> keys = collectKeys(expected, actual);
+        return keys.keySet().stream()
+            .filter(key -> !expected.getOrDefault(key, Set.of()).equals(actual.getOrDefault(key, Set.of())))
+            .toList();
+    }
+
+    private SortedMap<String, Set<String>> collectKeys(Map<String, Set<String>> expected, Map<String, Set<String>> actual) {
+        SortedMap<String, Set<String>> keys = new TreeMap<>();
+        expected.keySet().forEach(key -> keys.put(key, Set.of()));
+        actual.keySet().forEach(key -> keys.put(key, Set.of()));
+        return keys;
     }
 }

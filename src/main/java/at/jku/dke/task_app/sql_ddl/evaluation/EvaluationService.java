@@ -1,29 +1,36 @@
 package at.jku.dke.task_app.sql_ddl.evaluation;
 
-import at.jku.dke.etutor.task_app.dto.CriterionDto;
 import at.jku.dke.etutor.task_app.dto.GradingDto;
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLSubmissionDto;
+import at.jku.dke.task_app.sql_ddl.evaluation.feedback.EvaluationFeedbackService;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.BlockedBySyntaxFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.ComparisonFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionCountSummary;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionEvaluation;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.EvaluationExecutionResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.EvaluationResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.SyntaxFeedbackDetail;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.EntityNotFoundException;
 import org.h2.tools.RunScript;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
-import java.sql.Connection;
-import java.sql.SQLException;
 
 /**
  * Service that evaluates submissions.
@@ -33,32 +40,32 @@ public class EvaluationService {
     private static final Logger LOG = LoggerFactory.getLogger(EvaluationService.class);
 
     private final SQLDDLTaskRepository taskRepository;
-    private final MessageSource messageSource;
     private final EvaluationDatabaseConnectionManager connectionManager;
     private final SchemaMetadataExtractor schemaMetadataExtractor;
     private final SchemaComparisonService schemaComparisonService;
+    private final EvaluationFeedbackService feedbackService;
 
     /**
      * Creates a new instance of class {@link EvaluationService}.
      *
      * @param taskRepository          The task repository.
-     * @param messageSource           The message source.
      * @param connectionManager       The database connection manager.
      * @param schemaMetadataExtractor The schema metadata extractor.
      * @param schemaComparisonService The schema comparison service.
+     * @param feedbackService         The feedback service.
      */
     public EvaluationService(
         SQLDDLTaskRepository taskRepository,
-        MessageSource messageSource,
         EvaluationDatabaseConnectionManager connectionManager,
         SchemaMetadataExtractor schemaMetadataExtractor,
-        SchemaComparisonService schemaComparisonService
+        SchemaComparisonService schemaComparisonService,
+        EvaluationFeedbackService feedbackService
     ) {
         this.taskRepository = taskRepository;
-        this.messageSource = messageSource;
         this.connectionManager = connectionManager;
         this.schemaMetadataExtractor = schemaMetadataExtractor;
         this.schemaComparisonService = schemaComparisonService;
+        this.feedbackService = feedbackService;
     }
 
     /**
@@ -73,137 +80,172 @@ public class EvaluationService {
             .orElseThrow(() -> new EntityNotFoundException("Task " + submission.taskId() + " does not exist."));
 
         LOG.info("Evaluating input for task {} with mode {} and feedback-level {}", submission.taskId(), submission.mode(), submission.feedbackLevel());
-        Locale locale = Locale.of(submission.language());
-        List<CriterionDto> criteria = new ArrayList<>();
         EvaluationExecutionResult executionResult = executeSubmission(task, submission.submission().input());
-
-        return switch (submission.mode()) {
-            case RUN -> createRunResult(task, locale, criteria, executionResult);
-            case DIAGNOSE, SUBMIT -> createResult(task, locale, criteria, executionResult);
-            default -> throw new IllegalStateException("Unexpected value: " + submission.mode());
-        };
-    }
-
-    private GradingDto createRunResult(
-        SQLDDLTask task,
-        Locale locale,
-        List<CriterionDto> criteria,
-        EvaluationExecutionResult executionResult
-    ) {
-        criteria.add(new CriterionDto(
-            messageSource.getMessage("criterium.syntax", null, locale),
-            null,
-            executionResult.syntaxValid(),
-            executionResult.syntaxValid()
-                ? messageSource.getMessage("criterium.syntax.valid", null, locale)
-                : messageSource.getMessage("criterium.syntax.invalid", new Object[]{executionResult.errorMessage()}, locale)));
-
-        String feedback = messageSource.getMessage(
-            executionResult.syntaxValid() ? "run.syntax.valid" : "run.syntax.invalid",
-            null,
-            locale
+        EvaluationResult evaluationResult = evaluateWithTask(task, executionResult);
+        return feedbackService.toGrading(
+            task,
+            Locale.of(submission.language()),
+            evaluationResult,
+            submission.feedbackLevel(),
+            submission.mode()
         );
-        return new GradingDto(task.getMaxPoints(), BigDecimal.ZERO, feedback, criteria);
     }
 
-    private GradingDto createResult(
-        SQLDDLTask task,
-        Locale locale,
-        List<CriterionDto> criteria,
-        EvaluationExecutionResult executionResult
-    ) {
-        criteria.add(new CriterionDto(
-            messageSource.getMessage("criterium.syntax", null, locale),
+    EvaluationResult evaluateWithTask(SQLDDLTask task, EvaluationExecutionResult executionResult) {
+        JsonNode expected = task.getExecutedSolution();
+        List<CriterionEvaluation> criteria = new ArrayList<>();
+        criteria.add(new CriterionEvaluation(
+            "criterium.syntax",
             null,
             executionResult.syntaxValid(),
-            executionResult.syntaxValid()
-                ? messageSource.getMessage("criterium.syntax.valid", null, locale)
-                : messageSource.getMessage("criterium.syntax.invalid", new Object[]{executionResult.errorMessage()}, locale)));
+            new SyntaxFeedbackDetail(executionResult.errorMessage())
+        ));
 
         if (!executionResult.syntaxValid()) {
-            addBlockedCriterion(criteria, locale, "criterium.tables");
-            addBlockedCriterion(criteria, locale, "criterium.primarykey");
-            addBlockedCriterion(criteria, locale, "criterium.foreignkey");
-            addBlockedCriterion(criteria, locale, "criterium.constraint");
-            return new GradingDto(task.getMaxPoints(), BigDecimal.ZERO, messageSource.getMessage("incorrect", null, locale), criteria);
+            addBlockedCriterion(criteria, "criterium.tables");
+            addBlockedCriterion(criteria, "criterium.primarykey");
+            addBlockedCriterion(criteria, "criterium.foreignkey");
+            addBlockedCriterion(criteria, "criterium.constraint");
+
+            return new EvaluationResult(
+                false,
+                executionResult.errorMessage(),
+                BigDecimal.ZERO,
+                false,
+                "incorrect",
+                criteria,
+                List.of(
+                    new CriterionCountSummary("criterium.tables", false, 0, 0),
+                    new CriterionCountSummary("criterium.primarykey", false, 0, 0),
+                    new CriterionCountSummary("criterium.foreignkey", false, 0, 0),
+                    new CriterionCountSummary("criterium.constraint", false, 0, 0)
+                )
+            );
         }
 
-        JsonNode expected = task.getExecutedSolution();
         JsonNode actual = executionResult.schemaMetadata();
         BigDecimal points = BigDecimal.ZERO;
+        List<CriterionCountSummary> criterionCountSummaries = new ArrayList<>();
 
         boolean tablesMatch = schemaComparisonService.tablesMatch(expected, actual);
-        points = points.add(addComparisonCriterion(criteria, locale, "criterium.tables", "criterium.tables.match", "criterium.tables.mismatch", tablesMatch, task.getTablePoints()));
+        points = points.add(addComparisonCriterion(
+            criteria,
+            "criterium.tables",
+            tablesMatch,
+            task.getTablePoints(),
+            schemaComparisonService.matchingTableNames(expected, actual),
+            schemaComparisonService.mismatchingTableNames(expected, actual)
+        ));
+        criterionCountSummaries.add(new CriterionCountSummary(
+            "criterium.tables",
+            tablesMatch,
+            schemaComparisonService.countMatchingTables(expected, actual),
+            schemaComparisonService.countExpectedTables(expected)
+        ));
 
         boolean primaryKeyMatch = schemaComparisonService.primaryKeysMatch(expected, actual);
-        points = points.add(addComparisonCriterion(criteria, locale, "criterium.primarykey", "criterium.primarykey.match", "criterium.primarykey.mismatch", primaryKeyMatch, task.getPrimaryKeyPoints()));
+        points = points.add(addComparisonCriterion(
+            criteria,
+            "criterium.primarykey",
+            primaryKeyMatch,
+            task.getPrimaryKeyPoints(),
+            schemaComparisonService.matchingPrimaryKeyTableNames(expected, actual),
+            schemaComparisonService.mismatchingPrimaryKeyTableNames(expected, actual)
+        ));
+        criterionCountSummaries.add(new CriterionCountSummary(
+            "criterium.primarykey",
+            primaryKeyMatch,
+            schemaComparisonService.countMatchingPrimaryKeys(expected, actual),
+            schemaComparisonService.countExpectedPrimaryKeys(expected)
+        ));
 
         boolean foreignKeyMatch = schemaComparisonService.foreignKeysMatch(expected, actual);
-        points = points.add(addComparisonCriterion(criteria, locale, "criterium.foreignkey", "criterium.foreignkey.match", "criterium.foreignkey.mismatch", foreignKeyMatch, task.getForeignKeyPoints()));
+        points = points.add(addComparisonCriterion(
+            criteria,
+            "criterium.foreignkey",
+            foreignKeyMatch,
+            task.getForeignKeyPoints(),
+            schemaComparisonService.matchingForeignKeyTableNames(expected, actual),
+            schemaComparisonService.mismatchingForeignKeyTableNames(expected, actual)
+        ));
+        criterionCountSummaries.add(new CriterionCountSummary(
+            "criterium.foreignkey",
+            foreignKeyMatch,
+            schemaComparisonService.countMatchingForeignKeys(expected, actual),
+            schemaComparisonService.countExpectedForeignKeys(expected)
+        ));
 
         boolean uniqueMatch = schemaComparisonService.uniqueConstraintsMatch(expected, actual);
         boolean checkConstraintsMatch = executionResult.checkConstraintResults().stream().allMatch(CheckConstraintResult::passed);
         boolean constraintsMatch = uniqueMatch && checkConstraintsMatch;
-        points = points.add(addConstraintCriterion(criteria, locale, constraintsMatch, task.getConstraintPoints(), executionResult.checkConstraintResults()));
+        points = points.add(addConstraintCriterion(criteria, constraintsMatch, task.getConstraintPoints(), executionResult.checkConstraintResults()));
+        int matchedConstraints = schemaComparisonService.countMatchingUniqueConstraints(expected, actual)
+            + (int) executionResult.checkConstraintResults().stream().filter(CheckConstraintResult::passed).count();
+        int expectedConstraints = schemaComparisonService.countExpectedUniqueConstraints(expected)
+            + executionResult.checkConstraintResults().size();
+        criterionCountSummaries.add(new CriterionCountSummary(
+            "criterium.constraint",
+            constraintsMatch,
+            matchedConstraints,
+            expectedConstraints
+        ));
 
         boolean solved = tablesMatch && primaryKeyMatch && foreignKeyMatch && constraintsMatch;
-        String feedback = messageSource.getMessage(solved ? "correct" : "incorrect", null, locale);
-        return new GradingDto(task.getMaxPoints(), points, feedback, criteria);
+        return new EvaluationResult(
+            true,
+            null,
+            points,
+            solved,
+            solved ? "correct" : "incorrect",
+            criteria,
+            criterionCountSummaries
+        );
     }
 
-    private void addBlockedCriterion(List<CriterionDto> criteria, Locale locale, String criterionNameKey) {
-        criteria.add(new CriterionDto(
-            messageSource.getMessage(criterionNameKey, null, locale),
+    private void addBlockedCriterion(List<CriterionEvaluation> criteria, String criterionNameKey) {
+        criteria.add(new CriterionEvaluation(
+            criterionNameKey,
             BigDecimal.ZERO,
             false,
-            messageSource.getMessage("criterium.blockedBySyntax", null, locale)
+            new BlockedBySyntaxFeedbackDetail()
         ));
     }
 
     private BigDecimal addComparisonCriterion(
-        List<CriterionDto> criteria,
-        Locale locale,
+        List<CriterionEvaluation> criteria,
         String criterionNameKey,
-        String passedFeedbackKey,
-        String failedFeedbackKey,
         boolean passed,
-        Integer points
+        Integer points,
+        List<String> successfulEntries,
+        List<String> unsuccessfulEntries
     ) {
         BigDecimal awardedPoints = passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
-        criteria.add(new CriterionDto(
-            messageSource.getMessage(criterionNameKey, null, locale),
+        criteria.add(new CriterionEvaluation(
+            criterionNameKey,
             awardedPoints,
             passed,
-            messageSource.getMessage(passed ? passedFeedbackKey : failedFeedbackKey, null, locale)
+            new ComparisonFeedbackDetail(successfulEntries, unsuccessfulEntries)
         ));
         return awardedPoints;
     }
 
     private BigDecimal addConstraintCriterion(
-        List<CriterionDto> criteria,
-        Locale locale,
+        List<CriterionEvaluation> criteria,
         boolean passed,
         Integer points,
         List<CheckConstraintResult> checkConstraintResults
     ) {
         BigDecimal awardedPoints = passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
-        String baseFeedback = messageSource.getMessage(
-            passed ? "criterium.constraint.match" : "criterium.constraint.mismatch",
-            null,
-            locale
-        );
-        String feedback = buildCheckConstraintFeedback(locale, baseFeedback, checkConstraintResults);
-
-        criteria.add(new CriterionDto(
-            messageSource.getMessage("criterium.constraint", null, locale),
+        criteria.add(new CriterionEvaluation(
+            "criterium.constraint",
             awardedPoints,
             passed,
-            feedback
+            new CheckConstraintFeedbackDetail(checkConstraintResults)
         ));
         return awardedPoints;
     }
 
-    private EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {
+    EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {
         try (Connection connection = connectionManager.openForSubmission(task.getId())) {
             RunScript.execute(connection, new StringReader(ddl));
             JsonNode schemaMetadata = schemaMetadataExtractor.extract(connection, "PUBLIC");
@@ -213,46 +255,6 @@ public class EvaluationService {
             LOG.info("DDL execution failed for task {}: {}", task.getId(), ex.getMessage());
             return new EvaluationExecutionResult(false, ex.getMessage(), null, List.of());
         }
-    }
-
-    private String buildCheckConstraintFeedback(
-        Locale locale,
-        String baseFeedback,
-        List<CheckConstraintResult> checkConstraintResults
-    ) {
-        if (checkConstraintResults == null || checkConstraintResults.isEmpty()) {
-            String noChecks = messageSource.getMessage("criterium.constraint.details.none", null, locale);
-            return baseFeedback + " " + noChecks;
-        }
-
-        String successful = checkConstraintResults.stream()
-            .filter(CheckConstraintResult::passed)
-            .map(CheckConstraintResult::name)
-            .collect(Collectors.joining(", "));
-
-        String unsuccessful = checkConstraintResults.stream()
-            .filter(result -> !result.passed())
-            .map(CheckConstraintResult::name)
-            .collect(Collectors.joining(", "));
-
-        if (successful.isBlank()) {
-            successful = messageSource.getMessage("criterium.constraint.details.empty", null, locale);
-        }
-        if (unsuccessful.isBlank()) {
-            unsuccessful = messageSource.getMessage("criterium.constraint.details.empty", null, locale);
-        }
-
-        String successfulText = messageSource.getMessage(
-            "criterium.constraint.details.successful",
-            new Object[]{successful},
-            locale
-        );
-        String unsuccessfulText = messageSource.getMessage(
-            "criterium.constraint.details.unsuccessful",
-            new Object[]{unsuccessful},
-            locale
-        );
-        return baseFeedback + " " + successfulText + " " + unsuccessfulText;
     }
 
     private List<CheckConstraintResult> evaluateCheckConstraints(List<SQLDDLCheckConstraint> checkConstraints, Connection connection) throws SQLException {
@@ -320,19 +322,5 @@ public class EvaluationService {
             }
             return true;
         }
-    }
-
-    private record EvaluationExecutionResult(
-        boolean syntaxValid,
-        String errorMessage,
-        JsonNode schemaMetadata,
-        List<CheckConstraintResult> checkConstraintResults
-    ) {
-    }
-
-    private record CheckConstraintResult(
-        String name,
-        boolean passed
-    ) {
     }
 }
