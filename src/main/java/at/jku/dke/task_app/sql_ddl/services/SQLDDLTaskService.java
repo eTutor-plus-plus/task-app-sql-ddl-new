@@ -173,7 +173,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         connection.rollback(savepoint);
 
         return new SQLDDLCheckConstraint(
-            dto.checkDefinition(),
+            dto.definition(),
             dto.successfulStatements(),
             dto.unsuccessfulStatements()
         );
@@ -189,7 +189,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         } catch (SQLException ex) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Successful insert statements failed for check constraint '" + dto.checkDefinition() + "': "
+                "Successful insert statements failed for check constraint '" + dto.definition() + "': "
                     + ex.getMessage(),
                 ex
             );
@@ -205,13 +205,13 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             RunScript.execute(connection, new StringReader(dto.unsuccessfulStatements()));
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Unsuccessful insert statements unexpectedly succeeded for check constraint '" + dto.checkDefinition() + "'"
+                "Unsuccessful insert statements unexpectedly succeeded for check constraint '" + dto.definition() + "'"
             );
         } catch (SQLException ex) {
             if (!"23513".equals(ex.getSQLState())) {
                 throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Unsuccessful insert statements failed for a reason other than a check-constraint violation for '" + dto.checkDefinition() + "': "
+                    "Unsuccessful insert statements failed for a reason other than a check-constraint violation for '" + dto.definition() + "': "
                         + ex.getMessage(),
                     ex
                 );

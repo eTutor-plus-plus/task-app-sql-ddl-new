@@ -38,7 +38,7 @@ public class TaskController extends BaseTaskController<SQLDDLTask, SQLDDLTaskDto
                 ? List.of()
                 : task.getCheckConstraints().stream()
                 .map(constraint -> new SQLDDLCheckConstraintDto(
-                    constraint.getCheckDefinition(),
+                    constraint.getDefinition(),
                     constraint.getSuccessfulInsertStatements(),
                     constraint.getUnsuccessfulInsertStatements()
                 ))

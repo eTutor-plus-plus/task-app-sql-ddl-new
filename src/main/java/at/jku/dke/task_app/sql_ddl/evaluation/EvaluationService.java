@@ -310,8 +310,7 @@ public class EvaluationService {
         }
 
         return BigDecimal.valueOf(points)
-            .multiply(BigDecimal.valueOf(matched))
-            .divide(BigDecimal.valueOf(expected), DIVISION_SCALE, RoundingMode.HALF_UP);
+            .multiply(BigDecimal.valueOf(matched));
     }
 
     private BigDecimal roundPoints(BigDecimal points) {
@@ -338,9 +337,9 @@ public class EvaluationService {
         List<CheckConstraintResult> results = new ArrayList<>();
         for (SQLDDLCheckConstraint checkConstraint : checkConstraints) {
             boolean passed = evaluateCheckConstraint(checkConstraint, connection);
-            String name = checkConstraint.getCheckDefinition() == null || checkConstraint.getCheckDefinition().isBlank()
+            String name = checkConstraint.getDefinition() == null || checkConstraint.getDefinition().isBlank()
                 ? "<unnamed>"
-                : checkConstraint.getCheckDefinition();
+                : checkConstraint.getDefinition();
             results.add(new CheckConstraintResult(name, passed));
         }
         return results;
@@ -368,7 +367,7 @@ public class EvaluationService {
             RunScript.execute(connection, new StringReader(statements));
             return true;
         } catch (SQLException ex) {
-            LOG.info("Successful insert statements failed for '{}': {}", checkConstraint.getCheckDefinition(), ex.getMessage());
+            LOG.info("Successful insert statements failed for '{}': {}", checkConstraint.getDefinition(), ex.getMessage());
             return false;
         }
     }
@@ -381,13 +380,13 @@ public class EvaluationService {
 
         try {
             RunScript.execute(connection, new StringReader(statements));
-            LOG.info("Unsuccessful insert statements unexpectedly succeeded for '{}'", checkConstraint.getCheckDefinition());
+            LOG.info("Unsuccessful insert statements unexpectedly succeeded for '{}'", checkConstraint.getDefinition());
             return false;
         } catch (SQLException ex) {
             if (!"23513".equals(ex.getSQLState())) {
                 LOG.info(
                     "Unsuccessful insert statements failed for '{}' with unexpected SQL state {}: {}",
-                    checkConstraint.getCheckDefinition(),
+                    checkConstraint.getDefinition(),
                     ex.getSQLState(),
                     ex.getMessage()
                 );

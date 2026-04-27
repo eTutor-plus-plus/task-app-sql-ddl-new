@@ -24,7 +24,7 @@ public class SQLDDLCheckConstraint {
     private UUID id;
 
     @Column(name = "check_definition")
-    private String checkDefinition;
+    private String definition;
 
     @Column(name = "successful_insert_statements")
     private String successfulInsertStatements;
@@ -41,11 +41,11 @@ public class SQLDDLCheckConstraint {
     }
 
     public SQLDDLCheckConstraint(
-        String checkDefinition,
+        String definition,
         String successfulInsertStatements,
         String unsuccessfulInsertStatements
     ) {
-        this.checkDefinition = checkDefinition;
+        this.definition = definition;
         this.successfulInsertStatements = successfulInsertStatements;
         this.unsuccessfulInsertStatements = unsuccessfulInsertStatements;
     }
@@ -58,12 +58,12 @@ public class SQLDDLCheckConstraint {
         this.id = id;
     }
 
-    public String getCheckDefinition() {
-        return checkDefinition;
+    public String getDefinition() {
+        return definition;
     }
 
-    public void setCheckDefinition(String checkDefinition) {
-        this.checkDefinition = checkDefinition;
+    public void setDefinition(String definition) {
+        this.definition = definition;
     }
 
     public String getSuccessfulInsertStatements() {
