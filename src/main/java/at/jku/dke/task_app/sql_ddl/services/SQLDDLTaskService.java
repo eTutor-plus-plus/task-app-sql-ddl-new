@@ -9,6 +9,7 @@ import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLCheckConstraintDto;
 import at.jku.dke.task_app.sql_ddl.dto.ModifySQLDDLTaskDto;
 import at.jku.dke.task_app.sql_ddl.evaluation.SchemaMetadataExtractor;
+import at.jku.dke.task_app.sql_ddl.evaluation.WhitelistWordService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.h2.tools.RunScript;
 import org.slf4j.Logger;
@@ -23,8 +24,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Savepoint;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLTaskDto> {
@@ -32,15 +35,18 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
 
     private final MessageSource messageSource;
     private final SchemaMetadataExtractor schemaMetadataExtractor;
+    private final WhitelistWordService whitelistWordService;
 
     public SQLDDLTaskService(
         SQLDDLTaskRepository repository,
         MessageSource messageSource,
-        SchemaMetadataExtractor schemaMetadataExtractor
+        SchemaMetadataExtractor schemaMetadataExtractor,
+        WhitelistWordService whitelistWordService
     ) {
         super(repository);
         this.messageSource = messageSource;
         this.schemaMetadataExtractor = schemaMetadataExtractor;
+        this.whitelistWordService = whitelistWordService;
     }
 
     @Override
@@ -51,7 +57,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
 
         String solution = dto.additionalData().solution();
         String whitelist = dto.additionalData().whitelist() == null || dto.additionalData().whitelist().isBlank()
-            ? generateWordlist(solution)
+            ? whitelistWordService.generateWhitelist(solution)
             : dto.additionalData().whitelist();
 
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(solution, dto.additionalData().insertStatements());
@@ -87,7 +93,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
 
         String solution = dto.additionalData().solution();
         String whitelist = dto.additionalData().whitelist() == null || dto.additionalData().whitelist().isBlank()
-            ? generateWordlist(solution)
+            ? whitelistWordService.generateWhitelist(solution)
             : dto.additionalData().whitelist();
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(solution, dto.additionalData().insertStatements());
 
@@ -146,15 +152,6 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             LOG.warn("Schema setup failed for schema PUBLIC: {}", ex.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provided schema is not executable: " + ex.getMessage(), ex);
         }
-    }
-
-    private String generateWordlist(String solution) {
-        return Arrays.stream(solution.split("[^a-zA-Z0-9_]"))
-            .filter(word -> !word.isBlank())
-            .filter(word -> !word.matches("[0-9]+"))
-            .map(String::toLowerCase)
-            .distinct()
-            .collect(Collectors.joining(";"));
     }
 
     private List<SQLDDLCheckConstraint> buildCheckConstraints(Connection connection, List<SQLDDLCheckConstraintDto> checkConstraintDtos) throws SQLException {

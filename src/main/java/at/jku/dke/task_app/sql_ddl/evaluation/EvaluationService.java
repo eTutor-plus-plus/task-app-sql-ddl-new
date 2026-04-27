@@ -47,6 +47,7 @@ public class EvaluationService {
     private final EvaluationDatabaseConnectionManager connectionManager;
     private final SchemaMetadataExtractor schemaMetadataExtractor;
     private final SchemaComparisonService schemaComparisonService;
+    private final WhitelistWordService whitelistWordService;
     private final EvaluationFeedbackService feedbackService;
 
     /**
@@ -56,6 +57,7 @@ public class EvaluationService {
      * @param connectionManager       The database connection manager.
      * @param schemaMetadataExtractor The schema metadata extractor.
      * @param schemaComparisonService The schema comparison service.
+     * @param whitelistWordService    Service for whitelist comparisons.
      * @param feedbackService         The feedback service.
      */
     public EvaluationService(
@@ -63,12 +65,14 @@ public class EvaluationService {
         EvaluationDatabaseConnectionManager connectionManager,
         SchemaMetadataExtractor schemaMetadataExtractor,
         SchemaComparisonService schemaComparisonService,
+        WhitelistWordService whitelistWordService,
         EvaluationFeedbackService feedbackService
     ) {
         this.taskRepository = taskRepository;
         this.connectionManager = connectionManager;
         this.schemaMetadataExtractor = schemaMetadataExtractor;
         this.schemaComparisonService = schemaComparisonService;
+        this.whitelistWordService = whitelistWordService;
         this.feedbackService = feedbackService;
     }
 
@@ -85,7 +89,7 @@ public class EvaluationService {
 
         LOG.info("Evaluating input for task {} with mode {} and feedback-level {}", submission.taskId(), submission.mode(), submission.feedbackLevel());
         EvaluationExecutionResult executionResult = executeSubmission(task, submission.submission().input());
-        EvaluationResult evaluationResult = evaluateWithTask(task, executionResult);
+        EvaluationResult evaluationResult = evaluateWithTask(task, executionResult, submission.submission().input());
         return feedbackService.toGrading(
             task,
             Locale.of(submission.language()),
@@ -95,8 +99,9 @@ public class EvaluationService {
         );
     }
 
-    EvaluationResult evaluateWithTask(SQLDDLTask task, EvaluationExecutionResult executionResult) {
+    EvaluationResult evaluateWithTask(SQLDDLTask task, EvaluationExecutionResult executionResult, String submissionInput) {
         JsonNode expected = task.getExecutedSolution();
+        List<String> whitelistViolations = whitelistWordService.findWhitelistViolations(task.getWhitelist(), submissionInput);
         List<CriterionEvaluation> criteria = new ArrayList<>();
         criteria.add(new CriterionEvaluation(
             "criterium.syntax",
@@ -117,6 +122,7 @@ public class EvaluationService {
                 roundPoints(BigDecimal.ZERO),
                 false,
                 "incorrect",
+                whitelistViolations,
                 criteria,
                 List.of(
                     new CriterionCountSummary("criterium.tables", false, 0, 0, null),
@@ -229,6 +235,7 @@ public class EvaluationService {
             roundPoints(points),
             solved,
             solved ? "correct" : "incorrect",
+            whitelistViolations,
             criteria,
             criterionCountSummaries
         );

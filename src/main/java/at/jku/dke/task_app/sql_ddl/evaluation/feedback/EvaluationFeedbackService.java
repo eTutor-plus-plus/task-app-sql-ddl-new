@@ -52,9 +52,10 @@ public class EvaluationFeedbackService {
     private GradingDto createRunResult(SQLDDLTask task, Locale locale, EvaluationResult evaluationResult) {
         CriterionEvaluation syntaxCriterion = getSyntaxCriterion(evaluationResult);
         List<CriterionDto> criteria = List.of(new CriterionDto(getMessage(syntaxCriterion.key(), locale), syntaxCriterion.awardedPoints(), syntaxCriterion.passed(), buildDetailedFeedback(locale, syntaxCriterion)));
-        String feedback = getMessage(
+        String feedback = buildGeneralFeedback(
+            locale,
             evaluationResult.syntaxValid() ? "run.syntax.valid" : "run.syntax.invalid",
-            locale
+            evaluationResult.whitelistViolations()
         );
         return new GradingDto(task.getMaxPoints(), BigDecimal.ZERO, feedback, criteria);
     }
@@ -74,14 +75,14 @@ public class EvaluationFeedbackService {
                 return new GradingDto(
                     task.getMaxPoints(),
                     evaluationResult.points(),
-                    getMessage(evaluationResult.generalFeedbackKey(), locale),
+                    buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
                     List.of()
                 );
             case 1:
                 return new GradingDto(
                     task.getMaxPoints(),
                     evaluationResult.points(),
-                    getMessage(evaluationResult.generalFeedbackKey(), locale),
+                    buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
                     evaluationResult.criteria().stream()
                         .map(criterion -> new CriterionDto(getMessage(criterion.key(), locale), criterion.awardedPoints(), criterion.passed(), ""))
                         .toList()
@@ -108,18 +109,18 @@ public class EvaluationFeedbackService {
                 return new GradingDto(
                     task.getMaxPoints(),
                     evaluationResult.points(),
-                    getMessage(evaluationResult.generalFeedbackKey(), locale),
+                    buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
                     resultWithFeedback
                 );
             case 3:
                 return new GradingDto(
                     task.getMaxPoints(),
                     evaluationResult.points(),
-                    getMessage(evaluationResult.generalFeedbackKey(), locale),
+                    buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
                     Stream.concat(
                             evaluationResult.criteria().stream().filter(CriterionEvaluation::passed),
                             evaluationResult.criteria().stream().filter(c -> !c.passed())
-                            )
+                        )
                         .map(criterion -> new CriterionDto(
                             getMessage(criterion.key(), locale),
                             criterion.awardedPoints(),
@@ -131,6 +132,15 @@ public class EvaluationFeedbackService {
             default:
                 throw new IllegalStateException("Unexpected value: " + requestedFeedbackLevel);
         }
+    }
+
+    private String buildGeneralFeedback(Locale locale, String generalFeedbackKey, List<String> whitelistViolations) {
+        String whitelistMessage = "";
+        if (whitelistViolations != null && !whitelistViolations.isEmpty()) {
+            whitelistMessage = getMessage("feedback.whitelist.invalid", locale, String.join(", ", whitelistViolations));
+        }
+
+        return getMessage(generalFeedbackKey, locale) + HTML_LINE_BREAK + whitelistMessage;
     }
 
     private String buildDetailedFeedback(Locale locale, CriterionEvaluation criterion) {

@@ -10,6 +10,7 @@ import java.util.List;
  * @param points                  The awarded points.
  * @param solved                  Whether the full task was solved.
  * @param generalFeedbackKey      Message key for the overall feedback.
+ * @param whitelistViolations     Distinct submission words that are not part of the task whitelist.
  * @param criteria                Evaluated criteria in display order.
  * @param criterionCountSummaries Coarse summaries for feedback level 2.
  */
@@ -19,6 +20,7 @@ public record EvaluationResult(
     BigDecimal points,
     boolean solved,
     String generalFeedbackKey,
+    List<String> whitelistViolations,
     List<CriterionEvaluation> criteria,
     List<CriterionCountSummary> criterionCountSummaries
 ) {
