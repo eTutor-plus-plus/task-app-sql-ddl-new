@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.StringReader;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -38,6 +40,8 @@ import java.util.Locale;
 @Service
 public class EvaluationService {
     private static final Logger LOG = LoggerFactory.getLogger(EvaluationService.class);
+    private static final int DIVISION_SCALE = 10;
+    private static final int OUTPUT_SCALE = 2;
 
     private final SQLDDLTaskRepository taskRepository;
     private final EvaluationDatabaseConnectionManager connectionManager;
@@ -110,15 +114,15 @@ public class EvaluationService {
             return new EvaluationResult(
                 false,
                 executionResult.errorMessage(),
-                BigDecimal.ZERO,
+                roundPoints(BigDecimal.ZERO),
                 false,
                 "incorrect",
                 criteria,
                 List.of(
-                    new CriterionCountSummary("criterium.tables", false, 0, 0),
-                    new CriterionCountSummary("criterium.primarykey", false, 0, 0),
-                    new CriterionCountSummary("criterium.foreignkey", false, 0, 0),
-                    new CriterionCountSummary("criterium.constraint", false, 0, 0)
+                    new CriterionCountSummary("criterium.tables", false, 0, 0, null),
+                    new CriterionCountSummary("criterium.primarykey", false, 0, 0, null),
+                    new CriterionCountSummary("criterium.foreignkey", false, 0, 0, null),
+                    new CriterionCountSummary("criterium.constraint", false, 0, 0, null)
                 )
             );
         }
@@ -128,73 +132,101 @@ public class EvaluationService {
         List<CriterionCountSummary> criterionCountSummaries = new ArrayList<>();
 
         boolean tablesMatch = schemaComparisonService.tablesMatch(expected, actual);
-        points = points.add(addComparisonCriterion(
+        int matchingTables = schemaComparisonService.countMatchingTables(expected, actual);
+        int expectedTables = schemaComparisonService.countExpectedTables(expected);
+        BigDecimal tablePoints = addComparisonCriterion(
             criteria,
             "criterium.tables",
             tablesMatch,
             task.getTablePoints(),
+            matchingTables,
+            expectedTables,
             schemaComparisonService.matchingTableNames(expected, actual),
             schemaComparisonService.mismatchingTableNames(expected, actual)
-        ));
+        );
+        points = points.add(tablePoints);
         criterionCountSummaries.add(new CriterionCountSummary(
             "criterium.tables",
             tablesMatch,
-            schemaComparisonService.countMatchingTables(expected, actual),
-            schemaComparisonService.countExpectedTables(expected)
+            matchingTables,
+            expectedTables,
+            roundPoints(tablePoints)
         ));
 
         boolean primaryKeyMatch = schemaComparisonService.primaryKeysMatch(expected, actual);
-        points = points.add(addComparisonCriterion(
+        int matchingPrimaryKeys = schemaComparisonService.countMatchingPrimaryKeys(expected, actual);
+        int expectedPrimaryKeys = schemaComparisonService.countExpectedPrimaryKeys(expected);
+        BigDecimal primaryKeyPoints = addComparisonCriterion(
             criteria,
             "criterium.primarykey",
             primaryKeyMatch,
             task.getPrimaryKeyPoints(),
+            matchingPrimaryKeys,
+            expectedPrimaryKeys,
             schemaComparisonService.matchingPrimaryKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingPrimaryKeyTableNames(expected, actual)
-        ));
+        );
+
+        points = points.add(primaryKeyPoints);
         criterionCountSummaries.add(new CriterionCountSummary(
             "criterium.primarykey",
             primaryKeyMatch,
-            schemaComparisonService.countMatchingPrimaryKeys(expected, actual),
-            schemaComparisonService.countExpectedPrimaryKeys(expected)
+            matchingPrimaryKeys,
+            expectedPrimaryKeys,
+            roundPoints(primaryKeyPoints)
         ));
 
         boolean foreignKeyMatch = schemaComparisonService.foreignKeysMatch(expected, actual);
-        points = points.add(addComparisonCriterion(
+        int matchingForeignKeys = schemaComparisonService.countMatchingForeignKeys(expected, actual);
+        int expectedForeignKeys = schemaComparisonService.countExpectedForeignKeys(expected);
+        BigDecimal foreignKeyPoints = addComparisonCriterion(
             criteria,
             "criterium.foreignkey",
             foreignKeyMatch,
             task.getForeignKeyPoints(),
+            matchingForeignKeys,
+            expectedForeignKeys,
             schemaComparisonService.matchingForeignKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingForeignKeyTableNames(expected, actual)
-        ));
+        );
+        points = points.add(foreignKeyPoints);
         criterionCountSummaries.add(new CriterionCountSummary(
             "criterium.foreignkey",
             foreignKeyMatch,
-            schemaComparisonService.countMatchingForeignKeys(expected, actual),
-            schemaComparisonService.countExpectedForeignKeys(expected)
+            matchingForeignKeys,
+            expectedForeignKeys,
+            roundPoints(foreignKeyPoints)
         ));
 
         boolean uniqueMatch = schemaComparisonService.uniqueConstraintsMatch(expected, actual);
         boolean checkConstraintsMatch = executionResult.checkConstraintResults().stream().allMatch(CheckConstraintResult::passed);
         boolean constraintsMatch = uniqueMatch && checkConstraintsMatch;
-        points = points.add(addConstraintCriterion(criteria, constraintsMatch, task.getConstraintPoints(), executionResult.checkConstraintResults()));
         int matchedConstraints = schemaComparisonService.countMatchingUniqueConstraints(expected, actual)
             + (int) executionResult.checkConstraintResults().stream().filter(CheckConstraintResult::passed).count();
         int expectedConstraints = schemaComparisonService.countExpectedUniqueConstraints(expected)
             + executionResult.checkConstraintResults().size();
+        BigDecimal constraintPoints = addConstraintCriterion(
+            criteria,
+            constraintsMatch,
+            task.getConstraintPoints(),
+            matchedConstraints,
+            expectedConstraints,
+            executionResult.checkConstraintResults()
+        );
+        points = points.add(constraintPoints);
         criterionCountSummaries.add(new CriterionCountSummary(
             "criterium.constraint",
             constraintsMatch,
             matchedConstraints,
-            expectedConstraints
+            expectedConstraints,
+            roundPoints(constraintPoints)
         ));
 
         boolean solved = tablesMatch && primaryKeyMatch && foreignKeyMatch && constraintsMatch;
         return new EvaluationResult(
             true,
             null,
-            points,
+            roundPoints(points),
             solved,
             solved ? "correct" : "incorrect",
             criteria,
@@ -205,7 +237,7 @@ public class EvaluationService {
     private void addBlockedCriterion(List<CriterionEvaluation> criteria, String criterionNameKey) {
         criteria.add(new CriterionEvaluation(
             criterionNameKey,
-            BigDecimal.ZERO,
+            roundPoints(BigDecimal.ZERO),
             false,
             new BlockedBySyntaxFeedbackDetail()
         ));
@@ -216,13 +248,15 @@ public class EvaluationService {
         String criterionNameKey,
         boolean passed,
         Integer points,
+        int matched,
+        int expected,
         List<String> successfulEntries,
         List<String> unsuccessfulEntries
     ) {
-        BigDecimal awardedPoints = passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
+        BigDecimal awardedPoints = calculateAwardedPoints(points, matched, expected, passed);
         criteria.add(new CriterionEvaluation(
             criterionNameKey,
-            awardedPoints,
+            roundPoints(awardedPoints),
             passed,
             new ComparisonFeedbackDetail(successfulEntries, unsuccessfulEntries)
         ));
@@ -233,16 +267,36 @@ public class EvaluationService {
         List<CriterionEvaluation> criteria,
         boolean passed,
         Integer points,
+        int matched,
+        int expected,
         List<CheckConstraintResult> checkConstraintResults
     ) {
-        BigDecimal awardedPoints = passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
+        BigDecimal awardedPoints = calculateAwardedPoints(points, matched, expected, passed);
         criteria.add(new CriterionEvaluation(
             "criterium.constraint",
-            awardedPoints,
+            roundPoints(awardedPoints),
             passed,
             new CheckConstraintFeedbackDetail(checkConstraintResults)
         ));
         return awardedPoints;
+    }
+
+    private BigDecimal calculateAwardedPoints(Integer points, int matched, int expected, boolean passed) {
+        if (points == null || points == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        if (expected == 0) {
+            return passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
+        }
+
+        return BigDecimal.valueOf(points)
+            .multiply(BigDecimal.valueOf(matched))
+            .divide(BigDecimal.valueOf(expected), DIVISION_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal roundPoints(BigDecimal points) {
+        return points.setScale(OUTPUT_SCALE, RoundingMode.HALF_UP);
     }
 
     EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {

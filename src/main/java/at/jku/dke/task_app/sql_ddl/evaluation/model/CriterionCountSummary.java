@@ -1,5 +1,7 @@
 package at.jku.dke.task_app.sql_ddl.evaluation.model;
 
+import java.math.BigDecimal;
+
 /**
  * Summary counts for a criterion used for coarse feedback levels.
  *
@@ -12,6 +14,7 @@ public record CriterionCountSummary(
     String key,
     boolean passed,
     int matched,
-    int total
+    int total,
+    BigDecimal points
 ) {
 }

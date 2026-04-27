@@ -83,7 +83,7 @@ public class EvaluationFeedbackService {
                     evaluationResult.points(),
                     getMessage(evaluationResult.generalFeedbackKey(), locale),
                     evaluationResult.criteria().stream()
-                        .map(criterion -> new CriterionDto(getMessage(criterion.key(), locale), null, criterion.passed(), ""))
+                        .map(criterion -> new CriterionDto(getMessage(criterion.key(), locale), criterion.awardedPoints(), criterion.passed(), ""))
                         .toList()
                 );
             case 2:
@@ -99,7 +99,7 @@ public class EvaluationFeedbackService {
                 for (CriterionCountSummary summary : evaluationResult.criterionCountSummaries()) {
                     resultWithFeedback.add(new CriterionDto(
                         getMessage(summary.key(), locale),
-                        null,
+                        summary.points(),
                         summary.passed(),
                         getMessage("feedback.level2.criterion.summary", locale, summary.matched(), summary.total())
                     ));
@@ -117,9 +117,9 @@ public class EvaluationFeedbackService {
                     evaluationResult.points(),
                     getMessage(evaluationResult.generalFeedbackKey(), locale),
                     Stream.concat(
-                            evaluationResult.criteria().stream().filter(c -> !c.passed()),
-                            evaluationResult.criteria().stream().filter(CriterionEvaluation::passed)
-                        )
+                            evaluationResult.criteria().stream().filter(CriterionEvaluation::passed),
+                            evaluationResult.criteria().stream().filter(c -> !c.passed())
+                            )
                         .map(criterion -> new CriterionDto(
                             getMessage(criterion.key(), locale),
                             criterion.awardedPoints(),
@@ -144,7 +144,15 @@ public class EvaluationFeedbackService {
             case ComparisonFeedbackDetail detail:
                 String successfulCriterion = detail.successfulEntries() == null ? "" : String.join(", ", detail.successfulEntries());
                 String unsuccessfulCriterion = detail.unsuccessfulEntries() == null ? "" : String.join(", ", detail.unsuccessfulEntries());
-                return buildSuccessFailureFeedback(locale, successfulCriterion, unsuccessfulCriterion);
+                int successfulCriterionCount = detail.successfulEntries() == null ? 0 : detail.successfulEntries().size();
+                int unsuccessfulCriterionCount = detail.unsuccessfulEntries() == null ? 0 : detail.unsuccessfulEntries().size();
+                return buildSuccessFailureFeedback(
+                    locale,
+                    successfulCriterionCount,
+                    successfulCriterion,
+                    unsuccessfulCriterionCount,
+                    unsuccessfulCriterion
+                );
             case CheckConstraintFeedbackDetail detail:
                 if (detail.checkConstraintResults() == null || detail.checkConstraintResults().isEmpty()) {
                     return getMessage("criterium.details.empty", locale);
@@ -160,13 +168,32 @@ public class EvaluationFeedbackService {
                     .map(CheckConstraintResult::name)
                     .collect(Collectors.joining(", "));
 
-                return buildSuccessFailureFeedback(locale, successfulChecks, unsuccessfulChecks);
+                int successfulCheckCount = (int) detail.checkConstraintResults().stream()
+                    .filter(CheckConstraintResult::passed)
+                    .count();
+                int unsuccessfulCheckCount = (int) detail.checkConstraintResults().stream()
+                    .filter(result -> !result.passed())
+                    .count();
+
+                return buildSuccessFailureFeedback(
+                    locale,
+                    successfulCheckCount,
+                    successfulChecks,
+                    unsuccessfulCheckCount,
+                    unsuccessfulChecks
+                );
             default:
                 throw new IllegalStateException("Unexpected value: " + criterion.feedbackDetail());
         }
     }
 
-    private String buildSuccessFailureFeedback(Locale locale, String successfulEntries, String unsuccessfulEntries) {
+    private String buildSuccessFailureFeedback(
+        Locale locale,
+        int successfulCount,
+        String successfulEntries,
+        int unsuccessfulCount,
+        String unsuccessfulEntries
+    ) {
         String successful = successfulEntries == null || successfulEntries.isBlank()
             ? getMessage("criterium.details.empty", locale)
             : successfulEntries;
@@ -174,9 +201,11 @@ public class EvaluationFeedbackService {
             ? getMessage("criterium.details.empty", locale)
             : unsuccessfulEntries;
 
-        return getMessage("criterium.details.successful", locale, successful)
+        return getMessage("criterium.details.total", locale, successfulCount + unsuccessfulCount)
             + HTML_LINE_BREAK
-            + getMessage("criterium.details.unsuccessful", locale, unsuccessful);
+            + getMessage("criterium.details.successful", locale, successfulCount, successful)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.details.unsuccessful", locale, unsuccessfulCount, unsuccessful);
     }
 
     private CriterionEvaluation getSyntaxCriterion(EvaluationResult evaluationResult) {
