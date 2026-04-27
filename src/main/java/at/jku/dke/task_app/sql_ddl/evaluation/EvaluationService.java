@@ -7,8 +7,9 @@ import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLSubmissionDto;
 import at.jku.dke.task_app.sql_ddl.evaluation.feedback.EvaluationFeedbackService;
+import at.jku.dke.task_app.sql_ddl.evaluation.feedback.WhitelistWordService;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.BlockedBySyntaxFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.ConstraintFeedbackDetail;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintResult;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.ComparisonFeedbackDetail;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionCountSummary;
@@ -26,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.StringReader;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -205,18 +205,24 @@ public class EvaluationService {
         ));
 
         boolean uniqueMatch = schemaComparisonService.uniqueConstraintsMatch(expected, actual);
+        int matchingUniqueConstraints = schemaComparisonService.countMatchingUniqueConstraints(expected, actual);
+        int expectedUniqueConstraints = schemaComparisonService.countExpectedUniqueConstraints(expected);
         boolean checkConstraintsMatch = executionResult.checkConstraintResults().stream().allMatch(CheckConstraintResult::passed);
+        int matchingCheckConstraints = (int) executionResult.checkConstraintResults().stream()
+            .filter(CheckConstraintResult::passed)
+            .count();
+        int expectedCheckConstraints = executionResult.checkConstraintResults().size();
         boolean constraintsMatch = uniqueMatch && checkConstraintsMatch;
-        int matchedConstraints = schemaComparisonService.countMatchingUniqueConstraints(expected, actual)
-            + (int) executionResult.checkConstraintResults().stream().filter(CheckConstraintResult::passed).count();
-        int expectedConstraints = schemaComparisonService.countExpectedUniqueConstraints(expected)
-            + executionResult.checkConstraintResults().size();
+        int matchedConstraints = matchingUniqueConstraints + matchingCheckConstraints;
+        int expectedConstraints = expectedUniqueConstraints + expectedCheckConstraints;
         BigDecimal constraintPoints = addConstraintCriterion(
             criteria,
             constraintsMatch,
             task.getConstraintPoints(),
             matchedConstraints,
             expectedConstraints,
+            matchingUniqueConstraints,
+            expectedUniqueConstraints,
             executionResult.checkConstraintResults()
         );
         points = points.add(constraintPoints);
@@ -276,6 +282,8 @@ public class EvaluationService {
         Integer points,
         int matched,
         int expected,
+        int matchingUniqueConstraints,
+        int expectedUniqueConstraints,
         List<CheckConstraintResult> checkConstraintResults
     ) {
         BigDecimal awardedPoints = calculateAwardedPoints(points, matched, expected, passed);
@@ -283,7 +291,11 @@ public class EvaluationService {
             "criterium.constraint",
             roundPoints(awardedPoints),
             passed,
-            new CheckConstraintFeedbackDetail(checkConstraintResults)
+            new ConstraintFeedbackDetail(
+                matchingUniqueConstraints,
+                expectedUniqueConstraints,
+                checkConstraintResults
+            )
         ));
         return awardedPoints;
     }

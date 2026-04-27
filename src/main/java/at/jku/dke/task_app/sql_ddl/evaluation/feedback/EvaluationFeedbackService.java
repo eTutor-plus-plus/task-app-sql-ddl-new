@@ -5,7 +5,7 @@ import at.jku.dke.etutor.task_app.dto.GradingDto;
 import at.jku.dke.etutor.task_app.dto.SubmissionMode;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.BlockedBySyntaxFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.ConstraintFeedbackDetail;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintResult;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.ComparisonFeedbackDetail;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionCountSummary;
@@ -163,38 +163,58 @@ public class EvaluationFeedbackService {
                     unsuccessfulCriterionCount,
                     unsuccessfulCriterion
                 );
-            case CheckConstraintFeedbackDetail detail:
-                if (detail.checkConstraintResults() == null || detail.checkConstraintResults().isEmpty()) {
-                    return getMessage("criterium.details.empty", locale);
-                }
+            case ConstraintFeedbackDetail detail:
+                List<CheckConstraintResult> checkConstraintResults = detail.checkConstraintResults() == null
+                    ? List.of()
+                    : detail.checkConstraintResults();
 
-                String successfulChecks = detail.checkConstraintResults().stream()
+                String successfulChecks = checkConstraintResults.stream()
                     .filter(CheckConstraintResult::passed)
                     .map(CheckConstraintResult::name)
                     .collect(Collectors.joining(", "));
 
-                String unsuccessfulChecks = detail.checkConstraintResults().stream()
+                String unsuccessfulChecks = checkConstraintResults.stream()
                     .filter(result -> !result.passed())
                     .map(CheckConstraintResult::name)
                     .collect(Collectors.joining(", "));
 
-                int successfulCheckCount = (int) detail.checkConstraintResults().stream()
-                    .filter(CheckConstraintResult::passed)
-                    .count();
-                int unsuccessfulCheckCount = (int) detail.checkConstraintResults().stream()
-                    .filter(result -> !result.passed())
-                    .count();
+                int totalChecks = checkConstraintResults.size();
 
-                return buildSuccessFailureFeedback(
+                return buildConstraintFeedback(
                     locale,
-                    successfulCheckCount,
+                    detail.matchingUniqueConstraints(),
+                    detail.expectedUniqueConstraints(),
                     successfulChecks,
-                    unsuccessfulCheckCount,
-                    unsuccessfulChecks
+                    unsuccessfulChecks,
+                    totalChecks
                 );
             default:
                 throw new IllegalStateException("Unexpected value: " + criterion.feedbackDetail());
         }
+    }
+
+    private String buildConstraintFeedback(
+        Locale locale,
+        int matchingUniqueConstraints,
+        int expectedUniqueConstraints,
+        String successfulChecks,
+        String unsuccessfulChecks,
+        int totalChecks
+    ) {
+        String successful = successfulChecks == null || successfulChecks.isBlank()
+            ? getMessage("criterium.details.empty", locale)
+            : successfulChecks;
+        String unsuccessful = unsuccessfulChecks == null || unsuccessfulChecks.isBlank()
+            ? getMessage("criterium.details.empty", locale)
+            : unsuccessfulChecks;
+
+        return getMessage("criterium.details.total", locale, totalChecks + expectedUniqueConstraints)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.constraint.details.unique", locale, matchingUniqueConstraints, expectedUniqueConstraints)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.constraint.details.check.successful", locale, successful)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.constraint.details.check.unsuccessful", locale, unsuccessful);
     }
 
     private String buildSuccessFailureFeedback(

@@ -9,7 +9,7 @@ import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLCheckConstraintDto;
 import at.jku.dke.task_app.sql_ddl.dto.ModifySQLDDLTaskDto;
 import at.jku.dke.task_app.sql_ddl.evaluation.SchemaMetadataExtractor;
-import at.jku.dke.task_app.sql_ddl.evaluation.WhitelistWordService;
+import at.jku.dke.task_app.sql_ddl.evaluation.feedback.WhitelistWordService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.h2.tools.RunScript;
 import org.slf4j.Logger;
