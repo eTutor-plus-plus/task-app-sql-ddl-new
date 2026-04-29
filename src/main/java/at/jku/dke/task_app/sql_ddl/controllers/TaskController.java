@@ -1,6 +1,8 @@
 package at.jku.dke.task_app.sql_ddl.controllers;
 
 import at.jku.dke.etutor.task_app.controllers.BaseTaskController;
+import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
+import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLCheckConstraintDto;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLTaskDto;
@@ -33,17 +35,39 @@ public class TaskController extends BaseTaskController<SQLDDLTask, SQLDDLTaskDto
             task.getPrimaryKeyPoints(),
             task.getForeignKeyPoints(),
             task.getConstraintPoints(),
+            task.getAssertionPoints(),
             task.getWhitelist(),
-            task.getCheckConstraints() == null
-                ? List.of()
-                : task.getCheckConstraints().stream()
-                .map(constraint -> new SQLDDLCheckConstraintDto(
-                    constraint.getDefinition(),
-                    constraint.getSuccessfulInsertStatements(),
-                    constraint.getUnsuccessfulInsertStatements()
-                ))
-                .toList()
+            mapStatements(task.getCheckConstraints()),
+            mapAssertions(task.getAssertions())
         );
+    }
+
+    private List<SQLDDLCheckConstraintDto> mapStatements(List<SQLDDLCheckConstraint> statements) {
+        if (statements == null) {
+            return List.of();
+        }
+
+        return statements.stream()
+            .map(constraint -> new SQLDDLCheckConstraintDto(
+                constraint.getDefinition(),
+                constraint.getSuccessfulInsertStatements(),
+                constraint.getUnsuccessfulInsertStatements()
+            ))
+            .toList();
+    }
+
+    private List<SQLDDLCheckConstraintDto> mapAssertions(List<SQLDDLAssertion> assertions) {
+        if (assertions == null) {
+            return List.of();
+        }
+
+        return assertions.stream()
+            .map(assertion -> new SQLDDLCheckConstraintDto(
+                assertion.getName(),
+                assertion.getSuccessfulStatements(),
+                assertion.getUnsuccessfulStatements()
+            ))
+            .toList();
     }
 
 }

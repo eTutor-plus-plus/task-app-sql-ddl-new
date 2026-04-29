@@ -12,10 +12,10 @@ import java.util.Optional;
  */
 public interface SQLDDLTaskRepository extends TaskRepository<SQLDDLTask> {
     @Override
-    @EntityGraph(attributePaths = "checkConstraints")
+    @EntityGraph(attributePaths = {"checkConstraints", "assertions"})
     Optional<SQLDDLTask> findById(Long id);
 
     @Override
-    @EntityGraph(attributePaths = "checkConstraints")
+    @EntityGraph(attributePaths = {"checkConstraints", "assertions"})
     List<SQLDDLTask> findAll();
 }

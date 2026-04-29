@@ -1,0 +1,2 @@
+ALTER TABLE task
+    ADD COLUMN assertion_points INT NOT NULL DEFAULT 0;

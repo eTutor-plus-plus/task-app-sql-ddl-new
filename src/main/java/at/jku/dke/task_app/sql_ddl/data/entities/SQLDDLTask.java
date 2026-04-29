@@ -3,7 +3,6 @@ package at.jku.dke.task_app.sql_ddl.data.entities;
 import at.jku.dke.etutor.task_app.data.entities.BaseTask;
 import at.jku.dke.etutor.task_app.dto.TaskStatus;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,17 +45,38 @@ public class SQLDDLTask extends BaseTask {
     private Integer constraintPoints;
 
     @NotNull
+    @Column(name = "assertion_points", nullable = false)
+    private Integer assertionPoints;
+
+    @NotNull
     @Column(name = "whitelist", nullable = false, columnDefinition = "text")
     private String whitelist;
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SQLDDLCheckConstraint> checkConstraints = new ArrayList<>();
 
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SQLDDLAssertion> assertions = new ArrayList<>();
+
 
     public SQLDDLTask() {
     }
 
-    public SQLDDLTask(Long id, BigDecimal maxPoints, TaskStatus status, String solution, JsonNode executedSolution, Integer tablePoints, Integer primaryKeyPoints, Integer foreignKeyPoints, Integer constraintPoints, String whitelist, List<SQLDDLCheckConstraint> checkConstraints) {
+    public SQLDDLTask(
+        Long id,
+        BigDecimal maxPoints,
+        TaskStatus status,
+        String solution,
+        JsonNode executedSolution,
+        Integer tablePoints,
+        Integer primaryKeyPoints,
+        Integer foreignKeyPoints,
+        Integer constraintPoints,
+        Integer assertionPoints,
+        String whitelist,
+        List<SQLDDLCheckConstraint> checkConstraints,
+        List<SQLDDLAssertion> assertions
+    ) {
         super(id, maxPoints, status);
         this.solution = solution;
         this.executedSolution = executedSolution;
@@ -64,8 +84,10 @@ public class SQLDDLTask extends BaseTask {
         this.primaryKeyPoints = primaryKeyPoints;
         this.foreignKeyPoints = foreignKeyPoints;
         this.constraintPoints = constraintPoints;
+        this.assertionPoints = assertionPoints;
         this.whitelist = whitelist;
         this.checkConstraints = checkConstraints;
+        this.assertions = assertions;
     }
 
     public String getSolution() {
@@ -116,6 +138,14 @@ public class SQLDDLTask extends BaseTask {
         this.constraintPoints = constraintPoints;
     }
 
+    public Integer getAssertionPoints() {
+        return assertionPoints;
+    }
+
+    public void setAssertionPoints(Integer assertionPoints) {
+        this.assertionPoints = assertionPoints;
+    }
+
     public String getWhitelist() {
         return whitelist;
     }
@@ -130,5 +160,13 @@ public class SQLDDLTask extends BaseTask {
 
     public void setCheckConstraints(List<SQLDDLCheckConstraint> checkConstraints) {
         this.checkConstraints = checkConstraints;
+    }
+
+    public List<SQLDDLAssertion> getAssertions() {
+        return assertions;
+    }
+
+    public void setAssertions(List<SQLDDLAssertion> assertions) {
+        this.assertions = assertions;
     }
 }

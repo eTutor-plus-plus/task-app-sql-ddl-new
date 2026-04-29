@@ -3,6 +3,7 @@ package at.jku.dke.task_app.sql_ddl.services;
 import at.jku.dke.etutor.task_app.dto.ModifyTaskDto;
 import at.jku.dke.etutor.task_app.dto.TaskModificationResponseDto;
 import at.jku.dke.etutor.task_app.services.BaseTaskService;
+import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
@@ -60,7 +61,11 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             ? whitelistWordService.generateWhitelist(solution)
             : dto.additionalData().whitelist();
 
-        ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(solution, dto.additionalData().insertStatements());
+        ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
+            solution,
+            dto.additionalData().insertStatements(),
+            dto.additionalData().assertionStatements()
+        );
 
         SQLDDLTask task = new SQLDDLTask(
             id,
@@ -72,11 +77,14 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             dto.additionalData().primaryKeyPoints(),
             dto.additionalData().foreignKeyPoints(),
             dto.additionalData().constraintPoints(),
+            dto.additionalData().assertionPoints(),
             whitelist,
-            artifacts.checkConstraints()
+            artifacts.checkConstraints(),
+            artifacts.assertions()
         );
 
         artifacts.checkConstraints().forEach(constraint -> constraint.setTask(task));
+        artifacts.assertions().forEach(assertion -> assertion.setTask(task));
         return task;
     }
 
@@ -95,7 +103,11 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         String whitelist = dto.additionalData().whitelist() == null || dto.additionalData().whitelist().isBlank()
             ? whitelistWordService.generateWhitelist(solution)
             : dto.additionalData().whitelist();
-        ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(solution, dto.additionalData().insertStatements());
+        ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
+            solution,
+            dto.additionalData().insertStatements(),
+            dto.additionalData().assertionStatements()
+        );
 
         task.setMaxPoints(dto.maxPoints());
         task.setStatus(dto.status());
@@ -105,11 +117,17 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         task.setPrimaryKeyPoints(dto.additionalData().primaryKeyPoints());
         task.setForeignKeyPoints(dto.additionalData().foreignKeyPoints());
         task.setConstraintPoints(dto.additionalData().constraintPoints());
+        task.setAssertionPoints(dto.additionalData().assertionPoints());
         task.setWhitelist(whitelist);
         task.getCheckConstraints().clear();
         artifacts.checkConstraints().forEach(constraint -> {
             constraint.setTask(task);
             task.getCheckConstraints().add(constraint);
+        });
+        task.getAssertions().clear();
+        artifacts.assertions().forEach(assertion -> {
+            assertion.setTask(task);
+            task.getAssertions().add(assertion);
         });
     }
 
@@ -131,7 +149,11 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         );
     }
 
-    private ExecutedTaskArtifacts prepareTaskArtifacts(String solution, List<SQLDDLCheckConstraintDto> checkConstraintDtos) {
+    private ExecutedTaskArtifacts prepareTaskArtifacts(
+        String solution,
+        List<SQLDDLCheckConstraintDto> checkConstraintDtos,
+        List<SQLDDLCheckConstraintDto> assertionDtos
+    ) {
         if (solution == null || solution.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solution must not be blank.");
         }
@@ -147,7 +169,8 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             RunScript.execute(connection, new StringReader(solution));
             var executedSolution = schemaMetadataExtractor.extract(connection, "PUBLIC");
             List<SQLDDLCheckConstraint> checkConstraints = buildCheckConstraints(connection, checkConstraintDtos);
-            return new ExecutedTaskArtifacts(executedSolution, checkConstraints);
+            List<SQLDDLAssertion> assertions = buildAssertions(connection, assertionDtos);
+            return new ExecutedTaskArtifacts(executedSolution, checkConstraints, assertions);
         } catch (SQLException ex) {
             LOG.warn("Schema setup failed for schema PUBLIC: {}", ex.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provided schema is not executable: " + ex.getMessage(), ex);
@@ -166,10 +189,22 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         return checkConstraints;
     }
 
+    private List<SQLDDLAssertion> buildAssertions(Connection connection, List<SQLDDLCheckConstraintDto> assertionDtos) throws SQLException {
+        List<SQLDDLAssertion> assertions = new ArrayList<>();
+        if (assertionDtos == null) {
+            return assertions;
+        }
+
+        for (SQLDDLCheckConstraintDto assertionDto : assertionDtos) {
+            assertions.add(createAssertion(assertionDto, connection));
+        }
+        return assertions;
+    }
+
     private SQLDDLCheckConstraint createCheckConstraint(SQLDDLCheckConstraintDto dto, Connection connection) throws SQLException {
         Savepoint savepoint = connection.setSavepoint();
-        executeSuccessfulStatements(dto, connection);
-        executeUnsuccessfulStatements(dto, connection);
+        executeSuccessfulStatements(dto, connection, "check constraint");
+        executeUnsuccessfulStatements(dto, connection, "check constraint");
         connection.rollback(savepoint);
 
         return new SQLDDLCheckConstraint(
@@ -179,7 +214,20 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         );
     }
 
-    private void executeSuccessfulStatements(SQLDDLCheckConstraintDto dto, Connection connection) throws SQLException {
+    private SQLDDLAssertion createAssertion(SQLDDLCheckConstraintDto dto, Connection connection) throws SQLException {
+        Savepoint savepoint = connection.setSavepoint();
+        executeSuccessfulStatements(dto, connection, "assertion");
+        executeUnsuccessfulStatements(dto, connection, "assertion");
+        connection.rollback(savepoint);
+
+        return new SQLDDLAssertion(
+            dto.definition(),
+            dto.successfulStatements(),
+            dto.unsuccessfulStatements()
+        );
+    }
+
+    private void executeSuccessfulStatements(SQLDDLCheckConstraintDto dto, Connection connection, String statementType) throws SQLException {
         if (dto.successfulStatements() == null || dto.successfulStatements().isBlank()) {
             return;
         }
@@ -189,14 +237,14 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         } catch (SQLException ex) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Successful insert statements failed for check constraint '" + dto.definition() + "': "
+                "Successful insert statements failed for " + statementType + " '" + dto.definition() + "': "
                     + ex.getMessage(),
                 ex
             );
         }
     }
 
-    private void executeUnsuccessfulStatements(SQLDDLCheckConstraintDto dto, Connection connection) throws SQLException {
+    private void executeUnsuccessfulStatements(SQLDDLCheckConstraintDto dto, Connection connection, String statementType) throws SQLException {
         if (dto.unsuccessfulStatements() == null || dto.unsuccessfulStatements().isBlank()) {
             return;
         }
@@ -205,13 +253,13 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             RunScript.execute(connection, new StringReader(dto.unsuccessfulStatements()));
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Unsuccessful insert statements unexpectedly succeeded for check constraint '" + dto.definition() + "'"
+                "Unsuccessful insert statements unexpectedly succeeded for " + statementType + " '" + dto.definition() + "'"
             );
         } catch (SQLException ex) {
             if (!"23513".equals(ex.getSQLState())) {
                 throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Unsuccessful insert statements failed for a reason other than a check-constraint violation for '" + dto.definition() + "': "
+                    "Unsuccessful insert statements failed for a reason other than a check-constraint violation for " + statementType + " '" + dto.definition() + "': "
                         + ex.getMessage(),
                     ex
                 );
@@ -219,6 +267,10 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         }
     }
 
-    private record ExecutedTaskArtifacts(JsonNode executedSolution, List<SQLDDLCheckConstraint> checkConstraints) {
+    private record ExecutedTaskArtifacts(
+        JsonNode executedSolution,
+        List<SQLDDLCheckConstraint> checkConstraints,
+        List<SQLDDLAssertion> assertions
+    ) {
     }
 }

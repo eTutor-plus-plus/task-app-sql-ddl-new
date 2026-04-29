@@ -16,6 +16,8 @@ public record ModifySQLDDLTaskDto(
     @NotNull Integer primaryKeyPoints,
     @NotNull Integer foreignKeyPoints,
     @NotNull Integer constraintPoints,
+    Integer assertionPoints,
     String whitelist,
-    List<SQLDDLCheckConstraintDto> insertStatements
+    List<SQLDDLCheckConstraintDto> insertStatements,
+    List<SQLDDLCheckConstraintDto> assertionStatements
 ) implements Serializable {}
