@@ -260,7 +260,7 @@ public class EvaluationService {
         List<CriterionEvaluation> criteria,
         String criterionNameKey,
         boolean passed,
-        Integer points,
+        BigDecimal points,
         int matched,
         int expected,
         List<String> successfulEntries,
@@ -279,7 +279,7 @@ public class EvaluationService {
     private BigDecimal addConstraintCriterion(
         List<CriterionEvaluation> criteria,
         boolean passed,
-        Integer points,
+        BigDecimal points,
         int matched,
         int expected,
         int matchingUniqueConstraints,
@@ -300,17 +300,18 @@ public class EvaluationService {
         return awardedPoints;
     }
 
-    private BigDecimal calculateAwardedPoints(Integer points, int matched, int expected, boolean passed) {
-        if (points == null || points == 0) {
+    private BigDecimal calculateAwardedPoints(BigDecimal points, int matched, int expected, boolean passed) {
+        if (points == null || BigDecimal.ZERO.compareTo(points) == 0) {
             return BigDecimal.ZERO;
         }
 
         if (expected == 0) {
-            return passed ? BigDecimal.valueOf(points) : BigDecimal.ZERO;
+            return passed ? points : BigDecimal.ZERO;
         }
 
-        return BigDecimal.valueOf(points)
-            .multiply(BigDecimal.valueOf(matched));
+        return points
+            .multiply(BigDecimal.valueOf(matched))
+            .divide(BigDecimal.valueOf(expected), DIVISION_SCALE, RoundingMode.HALF_UP);
     }
 
     private BigDecimal roundPoints(BigDecimal points) {

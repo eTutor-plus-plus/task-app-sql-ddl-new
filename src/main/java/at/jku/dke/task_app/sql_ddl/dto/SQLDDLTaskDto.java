@@ -3,6 +3,7 @@ package at.jku.dke.task_app.sql_ddl.dto;
 import jakarta.validation.constraints.NotNull;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -12,11 +13,11 @@ import java.util.List;
  */
 public record SQLDDLTaskDto(
     @NotNull String solution,
-    @NotNull Integer tablePoints,
-    @NotNull Integer primaryKeyPoints,
-    @NotNull Integer foreignKeyPoints,
-    @NotNull Integer constraintPoints,
-    Integer assertionPoints,
+    @NotNull BigDecimal tablePoints,
+    @NotNull BigDecimal primaryKeyPoints,
+    @NotNull BigDecimal foreignKeyPoints,
+    @NotNull BigDecimal constraintPoints,
+    BigDecimal assertionPoints,
     String whitelist,
     List<SQLDDLCheckConstraintDto> insertStatements,
     List<SQLDDLCheckConstraintDto> assertionStatements

@@ -29,24 +29,24 @@ public class SQLDDLTask extends BaseTask {
     private JsonNode executedSolution;
 
     @NotNull
-    @Column(name = "table_points", nullable = false)
-    private Integer tablePoints;
+    @Column(name = "table_points", nullable = false, precision = 7, scale = 2)
+    private BigDecimal tablePoints;
 
     @NotNull
-    @Column(name = "primarykey_points", nullable = false)
-    private Integer primaryKeyPoints;
+    @Column(name = "primarykey_points", nullable = false, precision = 7, scale = 2)
+    private BigDecimal primaryKeyPoints;
 
     @NotNull
-    @Column(name = "foreignkey_points", nullable = false)
-    private Integer foreignKeyPoints;
+    @Column(name = "foreignkey_points", nullable = false, precision = 7, scale = 2)
+    private BigDecimal foreignKeyPoints;
 
     @NotNull
-    @Column(name = "constraint_points", nullable = false)
-    private Integer constraintPoints;
+    @Column(name = "constraint_points", nullable = false, precision = 7, scale = 2)
+    private BigDecimal constraintPoints;
 
     @NotNull
-    @Column(name = "assertion_points", nullable = false)
-    private Integer assertionPoints;
+    @Column(name = "assertion_points", nullable = false, precision = 7, scale = 2)
+    private BigDecimal assertionPoints;
 
     @NotNull
     @Column(name = "whitelist", nullable = false, columnDefinition = "text")
@@ -68,11 +68,11 @@ public class SQLDDLTask extends BaseTask {
         TaskStatus status,
         String solution,
         JsonNode executedSolution,
-        Integer tablePoints,
-        Integer primaryKeyPoints,
-        Integer foreignKeyPoints,
-        Integer constraintPoints,
-        Integer assertionPoints,
+        BigDecimal tablePoints,
+        BigDecimal primaryKeyPoints,
+        BigDecimal foreignKeyPoints,
+        BigDecimal constraintPoints,
+        BigDecimal assertionPoints,
         String whitelist,
         List<SQLDDLCheckConstraint> checkConstraints,
         List<SQLDDLAssertion> assertions
@@ -106,43 +106,43 @@ public class SQLDDLTask extends BaseTask {
         this.executedSolution = executedSolution;
     }
 
-    public Integer getTablePoints() {
+    public BigDecimal getTablePoints() {
         return tablePoints;
     }
 
-    public void setTablePoints(Integer tablePoints) {
+    public void setTablePoints(BigDecimal tablePoints) {
         this.tablePoints = tablePoints;
     }
 
-    public Integer getPrimaryKeyPoints() {
+    public BigDecimal getPrimaryKeyPoints() {
         return primaryKeyPoints;
     }
 
-    public void setPrimaryKeyPoints(Integer primaryKeyPoints) {
+    public void setPrimaryKeyPoints(BigDecimal primaryKeyPoints) {
         this.primaryKeyPoints = primaryKeyPoints;
     }
 
-    public Integer getForeignKeyPoints() {
+    public BigDecimal getForeignKeyPoints() {
         return foreignKeyPoints;
     }
 
-    public void setForeignKeyPoints(Integer foreignKeyPoints) {
+    public void setForeignKeyPoints(BigDecimal foreignKeyPoints) {
         this.foreignKeyPoints = foreignKeyPoints;
     }
 
-    public Integer getConstraintPoints() {
+    public BigDecimal getConstraintPoints() {
         return constraintPoints;
     }
 
-    public void setConstraintPoints(Integer constraintPoints) {
+    public void setConstraintPoints(BigDecimal constraintPoints) {
         this.constraintPoints = constraintPoints;
     }
 
-    public Integer getAssertionPoints() {
+    public BigDecimal getAssertionPoints() {
         return assertionPoints;
     }
 
-    public void setAssertionPoints(Integer assertionPoints) {
+    public void setAssertionPoints(BigDecimal assertionPoints) {
         this.assertionPoints = assertionPoints;
     }
 
