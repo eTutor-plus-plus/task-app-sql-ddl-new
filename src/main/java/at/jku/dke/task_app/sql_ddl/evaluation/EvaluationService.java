@@ -373,6 +373,11 @@ public class EvaluationService {
 
     EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {
         PreprocessingResult preprocessingResult = assertionScriptPreprocessor.preprocess(ddl);
+        if (!preprocessingResult.errors().isEmpty()) {
+            String errorMessage = String.join(" ", preprocessingResult.errors());
+            LOG.info("Assertion preprocessing failed for task {}: {}", task.getId(), errorMessage);
+            return new EvaluationExecutionResult(false, errorMessage, null, List.of(), List.of(), List.of());
+        }
 
         try (Connection connection = connectionManager.openForSubmission(task.getId())) {
             RunScript.execute(connection, new StringReader(preprocessingResult.sanitizedDdl()));

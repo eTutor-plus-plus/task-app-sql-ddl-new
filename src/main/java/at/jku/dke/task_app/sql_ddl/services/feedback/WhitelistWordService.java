@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Normalizes words from SQL DDL statements and whitelist definitions.
@@ -14,8 +16,10 @@ public class WhitelistWordService {
     private static final Pattern WORD_SEPARATOR = Pattern.compile("[^a-zA-Z0-9_]+");
     private static final Pattern NUMERIC_WORD = Pattern.compile("[0-9]+");
 
-    public String generateWhitelist(String input) {
-        return String.join(";", extractWords(input));
+    public String generateWhitelist(String input, String whitelist) {
+        return Stream.concat(extractWords(whitelist).stream(), extractWords(input).stream())
+            .distinct()
+            .collect(Collectors.joining(";"));
     }
 
     public List<String> findWhitelistViolations(String whitelist, String submission) {

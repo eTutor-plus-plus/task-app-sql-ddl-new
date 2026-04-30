@@ -70,9 +70,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         }
 
         String solution = dto.additionalData().solution();
-        String whitelist = dto.additionalData().whitelist() == null || dto.additionalData().whitelist().isBlank()
-            ? whitelistWordService.generateWhitelist(solution)
-            : dto.additionalData().whitelist();
+        String whitelist = whitelistWordService.generateWhitelist(solution, dto.additionalData().whitelist());
 
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
             solution,
@@ -113,9 +111,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         }
 
         String solution = dto.additionalData().solution();
-        String whitelist = dto.additionalData().whitelist() == null || dto.additionalData().whitelist().isBlank()
-            ? whitelistWordService.generateWhitelist(solution)
-            : dto.additionalData().whitelist();
+        String whitelist = whitelistWordService.generateWhitelist(solution, dto.additionalData().whitelist());
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
             solution,
             dto.additionalData().insertStatements(),

@@ -209,8 +209,7 @@ public class EvaluationFeedbackService {
                     locale,
                     successfulAssertions,
                     unsuccessfulAssertions,
-                    assertionResults.size(),
-                    detail.preprocessingErrors()
+                    assertionResults.size()
                 );
             default:
                 throw new IllegalStateException("Unexpected value: " + criterion.feedbackDetail());
@@ -266,8 +265,7 @@ public class EvaluationFeedbackService {
         Locale locale,
         String successfulAssertions,
         String unsuccessfulAssertions,
-        int totalAssertions,
-        List<String> preprocessingErrors
+        int totalAssertions
     ) {
         String successful = successfulAssertions == null || successfulAssertions.isBlank()
             ? getMessage("criterium.details.empty", locale)
@@ -275,17 +273,12 @@ public class EvaluationFeedbackService {
         String unsuccessful = unsuccessfulAssertions == null || unsuccessfulAssertions.isBlank()
             ? getMessage("criterium.details.empty", locale)
             : unsuccessfulAssertions;
-        String errors = preprocessingErrors == null || preprocessingErrors.isEmpty()
-            ? getMessage("criterium.details.empty", locale)
-            : String.join(", ", preprocessingErrors);
 
         return getMessage("criterium.details.total", locale, totalAssertions)
             + HTML_LINE_BREAK
             + getMessage("criterium.assertion.details.successful", locale, successful)
             + HTML_LINE_BREAK
-            + getMessage("criterium.assertion.details.unsuccessful", locale, unsuccessful)
-            + HTML_LINE_BREAK
-            + getMessage("criterium.assertion.details.errors", locale, errors);
+            + getMessage("criterium.assertion.details.unsuccessful", locale, unsuccessful);
     }
 
     private CriterionEvaluation getSyntaxCriterion(EvaluationResult evaluationResult) {
