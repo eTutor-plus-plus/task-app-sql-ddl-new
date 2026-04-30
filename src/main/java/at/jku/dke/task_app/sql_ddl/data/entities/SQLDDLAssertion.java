@@ -26,6 +26,9 @@ public class SQLDDLAssertion {
     @Column(name = "name")
     private String name;
 
+    @Column(name = "definition_sql", columnDefinition = "text")
+    private String definitionSql;
+
     @Column(name = "successful_statements", columnDefinition = "text")
     private String successfulStatements;
 
@@ -42,10 +45,12 @@ public class SQLDDLAssertion {
 
     public SQLDDLAssertion(
         String name,
+        String definitionSql,
         String successfulStatements,
         String unsuccessfulStatements
     ) {
         this.name = name;
+        this.definitionSql = definitionSql;
         this.successfulStatements = successfulStatements;
         this.unsuccessfulStatements = unsuccessfulStatements;
     }
@@ -64,6 +69,14 @@ public class SQLDDLAssertion {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getDefinitionSql() {
+        return definitionSql;
+    }
+
+    public void setDefinitionSql(String definitionSql) {
+        this.definitionSql = definitionSql;
     }
 
     public String getSuccessfulStatements() {

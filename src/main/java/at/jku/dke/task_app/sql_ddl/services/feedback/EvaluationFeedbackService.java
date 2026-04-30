@@ -1,17 +1,19 @@
-package at.jku.dke.task_app.sql_ddl.evaluation.feedback;
+package at.jku.dke.task_app.sql_ddl.services.feedback;
 
 import at.jku.dke.etutor.task_app.dto.CriterionDto;
 import at.jku.dke.etutor.task_app.dto.GradingDto;
 import at.jku.dke.etutor.task_app.dto.SubmissionMode;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.BlockedBySyntaxFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.ConstraintFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintResult;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.ComparisonFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionCountSummary;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionEvaluation;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.EvaluationResult;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.SyntaxFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.AssertionFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.AssertionResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.BlockedBySyntaxFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.ConstraintFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.check.CheckConstraintResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.ComparisonFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.CriterionCountSummary;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.CriterionEvaluation;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.EvaluationResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.SyntaxFeedbackDetail;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
@@ -188,6 +190,28 @@ public class EvaluationFeedbackService {
                     unsuccessfulChecks,
                     totalChecks
                 );
+            case AssertionFeedbackDetail detail:
+                List<AssertionResult> assertionResults = detail.assertionResults() == null
+                    ? List.of()
+                    : detail.assertionResults();
+
+                String successfulAssertions = assertionResults.stream()
+                    .filter(AssertionResult::passed)
+                    .map(AssertionResult::name)
+                    .collect(Collectors.joining(", "));
+
+                String unsuccessfulAssertions = assertionResults.stream()
+                    .filter(result -> !result.passed())
+                    .map(AssertionResult::name)
+                    .collect(Collectors.joining(", "));
+
+                return buildAssertionFeedback(
+                    locale,
+                    successfulAssertions,
+                    unsuccessfulAssertions,
+                    assertionResults.size(),
+                    detail.preprocessingErrors()
+                );
             default:
                 throw new IllegalStateException("Unexpected value: " + criterion.feedbackDetail());
         }
@@ -236,6 +260,32 @@ public class EvaluationFeedbackService {
             + getMessage("criterium.details.successful", locale, successfulCount, successful)
             + HTML_LINE_BREAK
             + getMessage("criterium.details.unsuccessful", locale, unsuccessfulCount, unsuccessful);
+    }
+
+    private String buildAssertionFeedback(
+        Locale locale,
+        String successfulAssertions,
+        String unsuccessfulAssertions,
+        int totalAssertions,
+        List<String> preprocessingErrors
+    ) {
+        String successful = successfulAssertions == null || successfulAssertions.isBlank()
+            ? getMessage("criterium.details.empty", locale)
+            : successfulAssertions;
+        String unsuccessful = unsuccessfulAssertions == null || unsuccessfulAssertions.isBlank()
+            ? getMessage("criterium.details.empty", locale)
+            : unsuccessfulAssertions;
+        String errors = preprocessingErrors == null || preprocessingErrors.isEmpty()
+            ? getMessage("criterium.details.empty", locale)
+            : String.join(", ", preprocessingErrors);
+
+        return getMessage("criterium.details.total", locale, totalAssertions)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.assertion.details.successful", locale, successful)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.assertion.details.unsuccessful", locale, unsuccessful)
+            + HTML_LINE_BREAK
+            + getMessage("criterium.assertion.details.errors", locale, errors);
     }
 
     private CriterionEvaluation getSyntaxCriterion(EvaluationResult evaluationResult) {

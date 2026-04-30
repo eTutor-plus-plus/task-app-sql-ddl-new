@@ -2,21 +2,23 @@ package at.jku.dke.task_app.sql_ddl.evaluation;
 
 import at.jku.dke.etutor.task_app.dto.GradingDto;
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
+import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLSubmissionDto;
-import at.jku.dke.task_app.sql_ddl.evaluation.feedback.EvaluationFeedbackService;
-import at.jku.dke.task_app.sql_ddl.evaluation.feedback.WhitelistWordService;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.BlockedBySyntaxFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.ConstraintFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CheckConstraintResult;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.ComparisonFeedbackDetail;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionCountSummary;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.CriterionEvaluation;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.EvaluationExecutionResult;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.EvaluationResult;
-import at.jku.dke.task_app.sql_ddl.evaluation.model.SyntaxFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.services.feedback.EvaluationFeedbackService;
+import at.jku.dke.task_app.sql_ddl.services.feedback.WhitelistWordService;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.AssertionFeedbackDetail;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.AssertionResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.ExtractedAssertion;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.check.CheckConstraintResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.EvaluationExecutionResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.EvaluationResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.PreprocessingResult;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.*;
+import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionConditionEvaluator;
+import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionScriptPreprocessor;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.EntityNotFoundException;
 import org.h2.tools.RunScript;
@@ -31,8 +33,10 @@ import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Service that evaluates submissions.
@@ -49,6 +53,8 @@ public class EvaluationService {
     private final SchemaComparisonService schemaComparisonService;
     private final WhitelistWordService whitelistWordService;
     private final EvaluationFeedbackService feedbackService;
+    private final AssertionScriptPreprocessor assertionScriptPreprocessor;
+    private final AssertionConditionEvaluator assertionConditionEvaluator;
 
     /**
      * Creates a new instance of class {@link EvaluationService}.
@@ -66,7 +72,9 @@ public class EvaluationService {
         SchemaMetadataExtractor schemaMetadataExtractor,
         SchemaComparisonService schemaComparisonService,
         WhitelistWordService whitelistWordService,
-        EvaluationFeedbackService feedbackService
+        EvaluationFeedbackService feedbackService,
+        AssertionScriptPreprocessor assertionScriptPreprocessor,
+        AssertionConditionEvaluator assertionConditionEvaluator
     ) {
         this.taskRepository = taskRepository;
         this.connectionManager = connectionManager;
@@ -74,6 +82,8 @@ public class EvaluationService {
         this.schemaComparisonService = schemaComparisonService;
         this.whitelistWordService = whitelistWordService;
         this.feedbackService = feedbackService;
+        this.assertionScriptPreprocessor = assertionScriptPreprocessor;
+        this.assertionConditionEvaluator = assertionConditionEvaluator;
     }
 
     /**
@@ -115,6 +125,7 @@ public class EvaluationService {
             addBlockedCriterion(criteria, "criterium.primarykey");
             addBlockedCriterion(criteria, "criterium.foreignkey");
             addBlockedCriterion(criteria, "criterium.constraint");
+            addBlockedCriterion(criteria, "criterium.assertion");
 
             return new EvaluationResult(
                 false,
@@ -128,8 +139,11 @@ public class EvaluationService {
                     new CriterionCountSummary("criterium.tables", false, 0, 0, null),
                     new CriterionCountSummary("criterium.primarykey", false, 0, 0, null),
                     new CriterionCountSummary("criterium.foreignkey", false, 0, 0, null),
-                    new CriterionCountSummary("criterium.constraint", false, 0, 0, null)
-                )
+                    new CriterionCountSummary("criterium.constraint", false, 0, 0, null),
+                    new CriterionCountSummary("criterium.assertion", false, 0, 0, null)
+                ),
+                List.of(),
+                List.of()
             );
         }
 
@@ -146,7 +160,6 @@ public class EvaluationService {
             tablesMatch,
             task.getTablePoints(),
             matchingTables,
-            expectedTables,
             schemaComparisonService.matchingTableNames(expected, actual),
             schemaComparisonService.mismatchingTableNames(expected, actual)
         );
@@ -168,7 +181,6 @@ public class EvaluationService {
             primaryKeyMatch,
             task.getPrimaryKeyPoints(),
             matchingPrimaryKeys,
-            expectedPrimaryKeys,
             schemaComparisonService.matchingPrimaryKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingPrimaryKeyTableNames(expected, actual)
         );
@@ -191,7 +203,6 @@ public class EvaluationService {
             foreignKeyMatch,
             task.getForeignKeyPoints(),
             matchingForeignKeys,
-            expectedForeignKeys,
             schemaComparisonService.matchingForeignKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingForeignKeyTableNames(expected, actual)
         );
@@ -222,7 +233,6 @@ public class EvaluationService {
             matchedConstraints,
             expectedConstraints,
             matchingUniqueConstraints,
-            expectedUniqueConstraints,
             executionResult.checkConstraintResults()
         );
         points = points.add(constraintPoints);
@@ -234,7 +244,30 @@ public class EvaluationService {
             roundPoints(constraintPoints)
         ));
 
-        boolean solved = tablesMatch && primaryKeyMatch && foreignKeyMatch && constraintsMatch;
+        boolean assertionsMatch = executionResult.assertionErrors().isEmpty()
+            && executionResult.assertionResults().stream().allMatch(AssertionResult::passed);
+        int matchingAssertions = (int) executionResult.assertionResults().stream()
+            .filter(AssertionResult::passed)
+            .count();
+        int expectedAssertions = task.getAssertions() == null ? 0 : task.getAssertions().size();
+        BigDecimal assertionPoints = addAssertionCriterion(
+            criteria,
+            assertionsMatch,
+            matchingAssertions,
+            task.getAssertionPoints(),
+            executionResult.assertionResults(),
+            executionResult.assertionErrors()
+        );
+        points = points.add(assertionPoints);
+        criterionCountSummaries.add(new CriterionCountSummary(
+            "criterium.assertion",
+            assertionsMatch,
+            matchingAssertions,
+            expectedAssertions,
+            roundPoints(assertionPoints)
+        ));
+
+        boolean solved = tablesMatch && primaryKeyMatch && foreignKeyMatch && constraintsMatch && assertionsMatch;
         return new EvaluationResult(
             true,
             null,
@@ -243,7 +276,9 @@ public class EvaluationService {
             solved ? "correct" : "incorrect",
             whitelistViolations,
             criteria,
-            criterionCountSummaries
+            criterionCountSummaries,
+            executionResult.assertionResults(),
+            executionResult.assertionErrors()
         );
     }
 
@@ -262,11 +297,10 @@ public class EvaluationService {
         boolean passed,
         BigDecimal points,
         int matched,
-        int expected,
         List<String> successfulEntries,
         List<String> unsuccessfulEntries
     ) {
-        BigDecimal awardedPoints = calculateAwardedPoints(points, matched, expected, passed);
+        BigDecimal awardedPoints = calculateAwardedPoints(points, matched);
         criteria.add(new CriterionEvaluation(
             criterionNameKey,
             roundPoints(awardedPoints),
@@ -281,12 +315,11 @@ public class EvaluationService {
         boolean passed,
         BigDecimal points,
         int matched,
-        int expected,
         int matchingUniqueConstraints,
         int expectedUniqueConstraints,
         List<CheckConstraintResult> checkConstraintResults
     ) {
-        BigDecimal awardedPoints = calculateAwardedPoints(points, matched, expected, passed);
+        BigDecimal awardedPoints = calculateAwardedPoints(points, matched);
         criteria.add(new CriterionEvaluation(
             "criterium.constraint",
             roundPoints(awardedPoints),
@@ -300,18 +333,38 @@ public class EvaluationService {
         return awardedPoints;
     }
 
-    private BigDecimal calculateAwardedPoints(BigDecimal points, int matched, int expected, boolean passed) {
+    private BigDecimal addAssertionCriterion(
+        List<CriterionEvaluation> criteria,
+        boolean passed,
+        int matchedAssertions,
+        BigDecimal points,
+        List<AssertionResult> assertionResults,
+        List<String> assertionErrors
+    ) {
+        BigDecimal awardedPoints = calculateAssertionPoints(points, matchedAssertions);
+        criteria.add(new CriterionEvaluation(
+            "criterium.assertion",
+            roundPoints(awardedPoints),
+            passed,
+            new AssertionFeedbackDetail(assertionResults, assertionErrors)
+        ));
+        return awardedPoints;
+    }
+
+    private BigDecimal calculateAwardedPoints(BigDecimal points, int matched) {
         if (points == null || BigDecimal.ZERO.compareTo(points) == 0) {
             return BigDecimal.ZERO;
         }
 
-        if (expected == 0) {
-            return passed ? points : BigDecimal.ZERO;
+        return points.multiply(BigDecimal.valueOf(matched));
+    }
+
+    private BigDecimal calculateAssertionPoints(BigDecimal points, int matched) {
+        if (points == null || BigDecimal.ZERO.compareTo(points) == 0) {
+            return BigDecimal.ZERO;
         }
 
-        return points
-            .multiply(BigDecimal.valueOf(matched))
-            .divide(BigDecimal.valueOf(expected), DIVISION_SCALE, RoundingMode.HALF_UP);
+        return points.multiply(BigDecimal.valueOf(matched));
     }
 
     private BigDecimal roundPoints(BigDecimal points) {
@@ -319,15 +372,58 @@ public class EvaluationService {
     }
 
     EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {
+        PreprocessingResult preprocessingResult = assertionScriptPreprocessor.preprocess(ddl);
+
         try (Connection connection = connectionManager.openForSubmission(task.getId())) {
-            RunScript.execute(connection, new StringReader(ddl));
+            RunScript.execute(connection, new StringReader(preprocessingResult.sanitizedDdl()));
             JsonNode schemaMetadata = schemaMetadataExtractor.extract(connection, "PUBLIC");
             List<CheckConstraintResult> checkConstraintResults = evaluateCheckConstraints(task.getCheckConstraints(), connection);
-            return new EvaluationExecutionResult(true, null, schemaMetadata, checkConstraintResults);
+            AssertionEvaluationOutcome assertionOutcome = evaluateAssertions(task.getAssertions(), preprocessingResult, connection);
+            return new EvaluationExecutionResult(
+                true,
+                null,
+                schemaMetadata,
+                checkConstraintResults,
+                assertionOutcome.results(),
+                assertionOutcome.errors()
+            );
         } catch (SQLException ex) {
             LOG.info("DDL execution failed for task {}: {}", task.getId(), ex.getMessage());
-            return new EvaluationExecutionResult(false, ex.getMessage(), null, List.of());
+            return new EvaluationExecutionResult(false, ex.getMessage(), null, List.of(), List.of(), List.of());
         }
+    }
+
+    private AssertionEvaluationOutcome evaluateAssertions(
+        List<SQLDDLAssertion> expectedAssertions,
+        PreprocessingResult preprocessingResult,
+        Connection connection
+    ) throws SQLException {
+        if (expectedAssertions == null || expectedAssertions.isEmpty()) {
+            return new AssertionEvaluationOutcome(List.of(), List.of());
+        }
+
+        Map<String, ExtractedAssertion> submissionAssertions = new LinkedHashMap<>();
+        for (ExtractedAssertion assertion : preprocessingResult.assertions()) {
+            submissionAssertions.putIfAbsent(AssertionScriptPreprocessor.normalizeName(assertion.name()), assertion);
+        }
+
+        List<AssertionResult> results = new ArrayList<>();
+        for (SQLDDLAssertion expectedAssertion : expectedAssertions) {
+            String name = expectedAssertion.getName() == null || expectedAssertion.getName().isBlank()
+                ? "<unnamed>"
+                : expectedAssertion.getName();
+            ExtractedAssertion submissionAssertion =
+                submissionAssertions.get(AssertionScriptPreprocessor.normalizeName(expectedAssertion.getName()));
+
+            if (submissionAssertion == null) {
+                results.add(new AssertionResult(name, false));
+                continue;
+            }
+
+            results.add(new AssertionResult(name, evaluateAssertion(expectedAssertion, submissionAssertion, connection)));
+        }
+
+        return new AssertionEvaluationOutcome(results, preprocessingResult.errors());
     }
 
     private List<CheckConstraintResult> evaluateCheckConstraints(List<SQLDDLCheckConstraint> checkConstraints, Connection connection) throws SQLException {
@@ -395,5 +491,69 @@ public class EvaluationService {
             }
             return true;
         }
+    }
+
+    private boolean evaluateAssertion(
+        SQLDDLAssertion expectedAssertion,
+        ExtractedAssertion submissionAssertion,
+        Connection connection
+    ) throws SQLException {
+        var successfulSavepoint = connection.setSavepoint();
+        try {
+            if (!executeAssertionSuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection)) {
+                return false;
+            }
+        } finally {
+            connection.rollback(successfulSavepoint);
+        }
+
+        var unsuccessfulSavepoint = connection.setSavepoint();
+        try {
+            return executeAssertionUnsuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection);
+        } finally {
+            connection.rollback(unsuccessfulSavepoint);
+        }
+    }
+
+    private boolean executeAssertionSuccessfulStatements(
+        SQLDDLAssertion assertion,
+        String definitionSql,
+        Connection connection
+    ) {
+        try {
+            return assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+                connection,
+                assertion.getSuccessfulStatements(),
+                definitionSql,
+                true
+            );
+        } catch (SQLException ex) {
+            LOG.info("Successful assertion statements failed for '{}': {}", assertion.getName(), ex.getMessage());
+            return false;
+        }
+    }
+
+    private boolean executeAssertionUnsuccessfulStatements(
+        SQLDDLAssertion assertion,
+        String definitionSql,
+        Connection connection
+    ) {
+        try {
+            return assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+                connection,
+                assertion.getUnsuccessfulStatements(),
+                definitionSql,
+                false
+            );
+        } catch (SQLException ex) {
+            LOG.info("Unsuccessful assertion statements failed for '{}': {}", assertion.getName(), ex.getMessage());
+            return false;
+        }
+    }
+
+    private record AssertionEvaluationOutcome(
+        List<AssertionResult> results,
+        List<String> errors
+    ) {
     }
 }

@@ -7,10 +7,15 @@ import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
 import at.jku.dke.task_app.sql_ddl.data.repositories.SQLDDLTaskRepository;
+import at.jku.dke.task_app.sql_ddl.dto.SQLDDLAssertionDto;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLCheckConstraintDto;
 import at.jku.dke.task_app.sql_ddl.dto.ModifySQLDDLTaskDto;
 import at.jku.dke.task_app.sql_ddl.evaluation.SchemaMetadataExtractor;
-import at.jku.dke.task_app.sql_ddl.evaluation.feedback.WhitelistWordService;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.ExtractedAssertion;
+import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.PreprocessingResult;
+import at.jku.dke.task_app.sql_ddl.services.feedback.WhitelistWordService;
+import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionConditionEvaluator;
+import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionScriptPreprocessor;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.h2.tools.RunScript;
 import org.slf4j.Logger;
@@ -26,8 +31,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -37,17 +44,23 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
     private final MessageSource messageSource;
     private final SchemaMetadataExtractor schemaMetadataExtractor;
     private final WhitelistWordService whitelistWordService;
+    private final AssertionScriptPreprocessor assertionScriptPreprocessor;
+    private final AssertionConditionEvaluator assertionConditionEvaluator;
 
     public SQLDDLTaskService(
         SQLDDLTaskRepository repository,
         MessageSource messageSource,
         SchemaMetadataExtractor schemaMetadataExtractor,
-        WhitelistWordService whitelistWordService
+        WhitelistWordService whitelistWordService,
+        AssertionScriptPreprocessor assertionScriptPreprocessor,
+        AssertionConditionEvaluator assertionConditionEvaluator
     ) {
         super(repository);
         this.messageSource = messageSource;
         this.schemaMetadataExtractor = schemaMetadataExtractor;
         this.whitelistWordService = whitelistWordService;
+        this.assertionScriptPreprocessor = assertionScriptPreprocessor;
+        this.assertionConditionEvaluator = assertionConditionEvaluator;
     }
 
     @Override
@@ -152,10 +165,18 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
     private ExecutedTaskArtifacts prepareTaskArtifacts(
         String solution,
         List<SQLDDLCheckConstraintDto> checkConstraintDtos,
-        List<SQLDDLCheckConstraintDto> assertionDtos
+        List<SQLDDLAssertionDto> assertionDtos
     ) {
         if (solution == null || solution.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solution must not be blank.");
+        }
+
+        PreprocessingResult preprocessingResult = assertionScriptPreprocessor.preprocess(solution);
+        if (!preprocessingResult.errors().isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Provided schema contains unsupported assertions: " + String.join(" ", preprocessingResult.errors())
+            );
         }
 
         String dbName = "sql_ddl_" + UUID.randomUUID();
@@ -166,10 +187,10 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         // when exiting the try block the H2 database connection is closed automatically
         try (Connection connection = DriverManager.getConnection(h2Url, "sa", "")) {
             connection.setAutoCommit(false);
-            RunScript.execute(connection, new StringReader(solution));
+            RunScript.execute(connection, new StringReader(preprocessingResult.sanitizedDdl()));
             var executedSolution = schemaMetadataExtractor.extract(connection, "PUBLIC");
             List<SQLDDLCheckConstraint> checkConstraints = buildCheckConstraints(connection, checkConstraintDtos);
-            List<SQLDDLAssertion> assertions = buildAssertions(connection, assertionDtos);
+            List<SQLDDLAssertion> assertions = buildAssertions(connection, preprocessingResult.assertions(), assertionDtos);
             return new ExecutedTaskArtifacts(executedSolution, checkConstraints, assertions);
         } catch (SQLException ex) {
             LOG.warn("Schema setup failed for schema PUBLIC: {}", ex.getMessage());
@@ -189,15 +210,51 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         return checkConstraints;
     }
 
-    private List<SQLDDLAssertion> buildAssertions(Connection connection, List<SQLDDLCheckConstraintDto> assertionDtos) throws SQLException {
+    private List<SQLDDLAssertion> buildAssertions(
+        Connection connection,
+        List<ExtractedAssertion> extractedAssertions,
+        List<SQLDDLAssertionDto> assertionDtos
+    ) throws SQLException {
         List<SQLDDLAssertion> assertions = new ArrayList<>();
-        if (assertionDtos == null) {
+        if ((extractedAssertions == null || extractedAssertions.isEmpty())
+            && (assertionDtos == null || assertionDtos.isEmpty())) {
             return assertions;
         }
 
-        for (SQLDDLCheckConstraintDto assertionDto : assertionDtos) {
-            assertions.add(createAssertion(assertionDto, connection));
+        Map<String, SQLDDLAssertionDto> assertionNameMap = new LinkedHashMap<>();
+        if (assertionDtos != null) {
+            for (SQLDDLAssertionDto assertionDto : assertionDtos) {
+                String normalizedName = AssertionScriptPreprocessor.normalizeName(assertionDto.definition());
+                if (assertionNameMap.putIfAbsent(normalizedName, assertionDto) != null) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Duplicate assertion fixture definition '" + assertionDto.definition() + "'."
+                    );
+                }
+            }
         }
+
+        for (ExtractedAssertion extractedAssertion : extractedAssertions) {
+            String normalizedName = AssertionScriptPreprocessor.normalizeName(extractedAssertion.name());
+            SQLDDLAssertionDto assertionDto = assertionNameMap.remove(normalizedName);
+            if (assertionDto == null) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Missing assertion fixture for assertion '" + extractedAssertion.name() + "'."
+                );
+            }
+
+            assertions.add(createAssertion(extractedAssertion, assertionDto, connection));
+        }
+
+        if (!assertionNameMap.isEmpty()) {
+            SQLDDLAssertionDto remainingFixture = assertionNameMap.values().iterator().next();
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Assertion fixture '" + remainingFixture.definition() + "' has no matching assertion in the solution."
+            );
+        }
+
         return assertions;
     }
 
@@ -214,14 +271,17 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         );
     }
 
-    private SQLDDLAssertion createAssertion(SQLDDLCheckConstraintDto dto, Connection connection) throws SQLException {
-        Savepoint savepoint = connection.setSavepoint();
-        executeSuccessfulStatements(dto, connection, "assertion");
-        executeUnsuccessfulStatements(dto, connection, "assertion");
-        connection.rollback(savepoint);
+    private SQLDDLAssertion createAssertion(
+        ExtractedAssertion extractedAssertion,
+        SQLDDLAssertionDto dto,
+        Connection connection
+    ) {
+        validateAssertionSuccessfulStatements(dto, extractedAssertion.definitionSql(), connection);
+        validateAssertionUnsuccessfulStatements(dto, extractedAssertion.definitionSql(), connection);
 
         return new SQLDDLAssertion(
-            dto.definition(),
+            extractedAssertion.name(),
+            extractedAssertion.definitionSql(),
             dto.successfulStatements(),
             dto.unsuccessfulStatements()
         );
@@ -264,6 +324,58 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
                     ex
                 );
             }
+        }
+    }
+
+    private void validateAssertionSuccessfulStatements(
+        SQLDDLAssertionDto dto,
+        String definitionSql,
+        Connection connection
+    ) {
+        try {
+            if (!assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+                connection,
+                dto.successfulStatements(),
+                definitionSql,
+                true
+            )) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Successful statements did not satisfy assertion '" + dto.definition() + "'."
+                );
+            }
+        } catch (SQLException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Successful statements failed for assertion '" + dto.definition() + "': " + ex.getMessage(),
+                ex
+            );
+        }
+    }
+
+    private void validateAssertionUnsuccessfulStatements(
+        SQLDDLAssertionDto dto,
+        String definitionSql,
+        Connection connection
+    ) {
+        try {
+            if (!assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+                connection,
+                dto.unsuccessfulStatements(),
+                definitionSql,
+                false
+            )) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unsuccessful statements did not violate assertion '" + dto.definition() + "'."
+                );
+            }
+        } catch (SQLException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Unsuccessful statements failed for assertion '" + dto.definition() + "': " + ex.getMessage(),
+                ex
+            );
         }
     }
 

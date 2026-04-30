@@ -1,4 +1,4 @@
-package at.jku.dke.task_app.sql_ddl.evaluation.feedback;
+package at.jku.dke.task_app.sql_ddl.services.feedback;
 
 import org.springframework.stereotype.Service;
 

@@ -4,6 +4,7 @@ import at.jku.dke.etutor.task_app.controllers.BaseTaskController;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLTask;
+import at.jku.dke.task_app.sql_ddl.dto.SQLDDLAssertionDto;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLCheckConstraintDto;
 import at.jku.dke.task_app.sql_ddl.dto.SQLDDLTaskDto;
 import at.jku.dke.task_app.sql_ddl.dto.ModifySQLDDLTaskDto;
@@ -56,13 +57,13 @@ public class TaskController extends BaseTaskController<SQLDDLTask, SQLDDLTaskDto
             .toList();
     }
 
-    private List<SQLDDLCheckConstraintDto> mapAssertions(List<SQLDDLAssertion> assertions) {
+    private List<SQLDDLAssertionDto> mapAssertions(List<SQLDDLAssertion> assertions) {
         if (assertions == null) {
             return List.of();
         }
 
         return assertions.stream()
-            .map(assertion -> new SQLDDLCheckConstraintDto(
+            .map(assertion -> new SQLDDLAssertionDto(
                 assertion.getName(),
                 assertion.getSuccessfulStatements(),
                 assertion.getUnsuccessfulStatements()

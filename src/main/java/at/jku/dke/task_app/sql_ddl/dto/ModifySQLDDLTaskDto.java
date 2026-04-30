@@ -20,5 +20,5 @@ public record ModifySQLDDLTaskDto(
     BigDecimal assertionPoints,
     String whitelist,
     List<SQLDDLCheckConstraintDto> insertStatements,
-    List<SQLDDLCheckConstraintDto> assertionStatements
+    List<SQLDDLAssertionDto> assertionStatements
 ) implements Serializable {}

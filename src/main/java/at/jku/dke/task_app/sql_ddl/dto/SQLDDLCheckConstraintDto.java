@@ -7,7 +7,7 @@ import java.io.Serializable;
 /**
  * DTO for one check-constraint input row from the frontend.
  *
- * @param definition The check constraint name.
+ * @param definition The check constraint definition.
  * @param successfulStatements The insert statements which are successfully inserted into the table used for checking.
  * @param unsuccessfulStatements The insert statements which are not successfully inserted into the table used for checking.
  */

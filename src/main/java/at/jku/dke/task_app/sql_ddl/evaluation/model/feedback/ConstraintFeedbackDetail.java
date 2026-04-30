@@ -1,4 +1,6 @@
-package at.jku.dke.task_app.sql_ddl.evaluation.model;
+package at.jku.dke.task_app.sql_ddl.evaluation.model.feedback;
+
+import at.jku.dke.task_app.sql_ddl.evaluation.model.check.CheckConstraintResult;
 
 import java.util.List;
 
