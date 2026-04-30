@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,6 +51,8 @@ public class AssertionScriptPreprocessor {
             return new PreprocessingResult("", List.of(), List.of());
         }
 
+        boolean containsAssertions = false;
+
         // Keep the different outputs separate: runnable DDL, extracted assertions, duplicate tracking,
         // and user-facing errors collected during parsing.
         List<ExtractedAssertion> assertions = new ArrayList<>();
@@ -73,6 +74,8 @@ public class AssertionScriptPreprocessor {
                 sanitizedStatements.add(trimmedStatement);
                 continue;
             }
+
+            containsAssertions = true;
 
             // Assertions are only accepted in one explicit form; everything else is reported as unsupported.
             Matcher matcher = SUPPORTED_ASSERTION_PATTERN.matcher(statementWithoutLeadingComments);
@@ -96,6 +99,10 @@ public class AssertionScriptPreprocessor {
             }
 
             assertions.add(new ExtractedAssertion(name, definitionSql));
+        }
+
+        if (!containsAssertions) {
+            return new PreprocessingResult(ddl, List.of(), List.of());
         }
 
         return new PreprocessingResult(
