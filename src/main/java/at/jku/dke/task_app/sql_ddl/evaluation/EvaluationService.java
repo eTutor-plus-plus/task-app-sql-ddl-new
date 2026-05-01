@@ -231,8 +231,8 @@ public class EvaluationService {
             constraintsMatch,
             task.getConstraintPoints(),
             matchedConstraints,
-            expectedConstraints,
             matchingUniqueConstraints,
+            expectedUniqueConstraints,
             executionResult.checkConstraintResults()
         );
         points = points.add(constraintPoints);
