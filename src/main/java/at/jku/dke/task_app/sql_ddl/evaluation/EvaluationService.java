@@ -44,7 +44,6 @@ import java.util.Map;
 @Service
 public class EvaluationService {
     private static final Logger LOG = LoggerFactory.getLogger(EvaluationService.class);
-    private static final int DIVISION_SCALE = 10;
     private static final int OUTPUT_SCALE = 2;
 
     private final SQLDDLTaskRepository taskRepository;
