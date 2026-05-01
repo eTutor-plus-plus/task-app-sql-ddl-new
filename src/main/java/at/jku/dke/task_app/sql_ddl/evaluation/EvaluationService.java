@@ -501,22 +501,12 @@ public class EvaluationService {
         SQLDDLAssertion expectedAssertion,
         ExtractedAssertion submissionAssertion,
         Connection connection
-    ) throws SQLException {
-        var successfulSavepoint = connection.setSavepoint();
-        try {
-            if (!executeAssertionSuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection)) {
-                return false;
-            }
-        } finally {
-            connection.rollback(successfulSavepoint);
+    ) {
+        if (!executeAssertionSuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection)) {
+            return false;
         }
+        return executeAssertionUnsuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection);
 
-        var unsuccessfulSavepoint = connection.setSavepoint();
-        try {
-            return executeAssertionUnsuccessfulStatements(expectedAssertion, submissionAssertion.definitionSql(), connection);
-        } finally {
-            connection.rollback(unsuccessfulSavepoint);
-        }
     }
 
     private boolean executeAssertionSuccessfulStatements(
@@ -525,7 +515,7 @@ public class EvaluationService {
         Connection connection
     ) {
         try {
-            return assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+            return assertionConditionEvaluator.matchesExpectedOutcomeForAllStatement(
                 connection,
                 assertion.getSuccessfulStatements(),
                 definitionSql,

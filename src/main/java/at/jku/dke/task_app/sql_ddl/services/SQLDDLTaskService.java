@@ -329,7 +329,7 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         Connection connection
     ) {
         try {
-            if (!assertionConditionEvaluator.matchesExpectedOutcomeForEachStatement(
+            if (!assertionConditionEvaluator.matchesExpectedOutcomeForAllStatement(
                 connection,
                 dto.successfulStatements(),
                 definitionSql,

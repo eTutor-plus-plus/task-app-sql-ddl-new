@@ -42,7 +42,22 @@ public class AssertionConditionEvaluator {
     }
 
     /**
-     * Validates every semicolon terminated statement independently against the same base schema.
+     * Validates the whole script of insert statements.
+     * Especially for successful insert statements.
+     */
+    public boolean matchesExpectedOutcomeForAllStatement(
+            Connection connection,
+            String statements,
+            String definitionSql,
+            boolean expectedSatisfied
+    ) throws SQLException {
+        executeStatements(connection, statements);
+        return isSatisfied(connection, definitionSql) == expectedSatisfied;
+    }
+
+    /**
+     * Validates every semicolon terminated statement independently.
+     * Especially for unsuccessful insert statements.
      */
     public boolean matchesExpectedOutcomeForEachStatement(
         Connection connection,
