@@ -16,6 +16,7 @@ import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.PreprocessingResu
 import at.jku.dke.task_app.sql_ddl.services.feedback.WhitelistWordService;
 import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionConditionEvaluator;
 import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionScriptPreprocessor;
+import at.jku.dke.task_app.sql_ddl.services.assertion.SqlStatementSplitter;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.h2.tools.RunScript;
 import org.slf4j.Logger;
@@ -305,20 +306,29 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             return;
         }
 
-        try {
-            RunScript.execute(connection, new StringReader(dto.unsuccessfulStatements()));
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Unsuccessful insert statements unexpectedly succeeded for " + statementType + " '" + dto.definition() + "'"
-            );
-        } catch (SQLException ex) {
-            if (!"23513".equals(ex.getSQLState())) {
+        for (String statement : SqlStatementSplitter.splitStatements(dto.unsuccessfulStatements())) {
+            if (statement.trim().isBlank()) {
+                continue;
+            }
+
+            Savepoint savepoint = connection.setSavepoint();
+            try {
+                RunScript.execute(connection, new StringReader(statement));
                 throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Unsuccessful insert statements failed for a reason other than a check-constraint violation for " + statementType + " '" + dto.definition() + "': "
-                        + ex.getMessage(),
-                    ex
+                    "Unsuccessful insert statements unexpectedly succeeded for " + statementType + " '" + dto.definition() + "'"
                 );
+            } catch (SQLException ex) {
+                if (!"23513".equals(ex.getSQLState())) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Unsuccessful insert statements failed for a reason other than a check-constraint violation for " + statementType + " '" + dto.definition() + "': "
+                            + ex.getMessage(),
+                        ex
+                    );
+                }
+            } finally {
+                connection.rollback(savepoint);
             }
         }
     }

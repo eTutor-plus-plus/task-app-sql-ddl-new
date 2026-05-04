@@ -19,6 +19,7 @@ import at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation.PreprocessingResu
 import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.*;
 import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionConditionEvaluator;
 import at.jku.dke.task_app.sql_ddl.services.assertion.AssertionScriptPreprocessor;
+import at.jku.dke.task_app.sql_ddl.services.assertion.SqlStatementSplitter;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.EntityNotFoundException;
 import org.h2.tools.RunScript;
@@ -473,28 +474,38 @@ public class EvaluationService {
         }
     }
 
-    private boolean executeUnsuccessfulStatements(SQLDDLCheckConstraint checkConstraint, Connection connection) {
+    private boolean executeUnsuccessfulStatements(SQLDDLCheckConstraint checkConstraint, Connection connection) throws SQLException {
         String statements = checkConstraint.getUnsuccessfulInsertStatements();
         if (statements == null || statements.isBlank()) {
             return true;
         }
 
-        try {
-            RunScript.execute(connection, new StringReader(statements));
-            LOG.info("Unsuccessful insert statements unexpectedly succeeded for '{}'", checkConstraint.getDefinition());
-            return false;
-        } catch (SQLException ex) {
-            if (!"23513".equals(ex.getSQLState())) {
-                LOG.info(
-                    "Unsuccessful insert statements failed for '{}' with unexpected SQL state {}: {}",
-                    checkConstraint.getDefinition(),
-                    ex.getSQLState(),
-                    ex.getMessage()
-                );
-                return false;
+        for (String statement : SqlStatementSplitter.splitStatements(statements)) {
+            if (statement.trim().isBlank()) {
+                continue;
             }
-            return true;
+
+            var savepoint = connection.setSavepoint();
+            try {
+                RunScript.execute(connection, new StringReader(statement));
+                LOG.info("Unsuccessful insert statements unexpectedly succeeded for '{}'", checkConstraint.getDefinition());
+                return false;
+            } catch (SQLException ex) {
+                if (!"23513".equals(ex.getSQLState())) {
+                    LOG.info(
+                        "Unsuccessful insert statements failed for '{}' with unexpected SQL state {}: {}",
+                        checkConstraint.getDefinition(),
+                        ex.getSQLState(),
+                        ex.getMessage()
+                    );
+                    return false;
+                }
+            } finally {
+                connection.rollback(savepoint);
+            }
         }
+
+        return true;
     }
 
     private boolean evaluateAssertion(
