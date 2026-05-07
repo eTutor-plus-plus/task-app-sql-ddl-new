@@ -22,6 +22,13 @@ public class WhitelistWordService {
             .collect(Collectors.joining(";"));
     }
 
+    public String generateWhitelist(String input) {
+        return extractWords(input)
+            .stream()
+            .distinct()
+            .collect(Collectors.joining(";"));
+    }
+
     public List<String> findWhitelistViolations(String whitelist, String submission) {
         Set<String> allowedWords = Set.copyOf(extractWords(whitelist));
         return extractWords(submission).stream()

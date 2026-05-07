@@ -71,7 +71,8 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         }
 
         String solution = dto.additionalData().solution();
-        String whitelist = whitelistWordService.generateWhitelist(solution, dto.additionalData().whitelist());
+        String whitelist = dto.additionalData().whitelist();
+        String generatedWhitelist = whitelistWordService.generateWhitelist(solution, whitelist);
 
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
             solution,
@@ -90,7 +91,8 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
             dto.additionalData().foreignKeyPoints(),
             dto.additionalData().constraintPoints(),
             dto.additionalData().assertionPoints(),
-            whitelist,
+            whitelistWordService.generateWhitelist(dto.additionalData().whitelist()),
+            generatedWhitelist,
             artifacts.checkConstraints(),
             artifacts.assertions()
         );
@@ -112,7 +114,8 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         }
 
         String solution = dto.additionalData().solution();
-        String whitelist = whitelistWordService.generateWhitelist(solution, dto.additionalData().whitelist());
+        String whitelist = dto.additionalData().whitelist();
+        String generatedWhitelist = whitelistWordService.generateWhitelist(solution, whitelist);
         ExecutedTaskArtifacts artifacts = prepareTaskArtifacts(
             solution,
             dto.additionalData().insertStatements(),
@@ -128,7 +131,8 @@ public class SQLDDLTaskService extends BaseTaskService<SQLDDLTask, ModifySQLDDLT
         task.setForeignKeyPoints(dto.additionalData().foreignKeyPoints());
         task.setConstraintPoints(dto.additionalData().constraintPoints());
         task.setAssertionPoints(dto.additionalData().assertionPoints());
-        task.setWhitelist(whitelist);
+        task.setWhitelist(whitelistWordService.generateWhitelist(dto.additionalData().whitelist()));
+        task.setGeneratedWhitelist(generatedWhitelist);
         task.getCheckConstraints().clear();
         artifacts.checkConstraints().forEach(constraint -> {
             constraint.setTask(task);

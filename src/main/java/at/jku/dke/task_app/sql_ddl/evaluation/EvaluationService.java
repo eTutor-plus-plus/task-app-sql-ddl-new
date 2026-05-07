@@ -111,7 +111,7 @@ public class EvaluationService {
 
     EvaluationResult evaluateWithTask(SQLDDLTask task, EvaluationExecutionResult executionResult, String submissionInput) {
         JsonNode expected = task.getExecutedSolution();
-        List<String> whitelistViolations = whitelistWordService.findWhitelistViolations(task.getWhitelist(), submissionInput);
+        List<String> whitelistViolations = whitelistWordService.findWhitelistViolations(task.getGeneratedWhitelist(), submissionInput);
         List<CriterionEvaluation> criteria = new ArrayList<>();
         criteria.add(new CriterionEvaluation(
             "criterium.syntax",

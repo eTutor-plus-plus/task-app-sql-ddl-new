@@ -48,9 +48,12 @@ public class SQLDDLTask extends BaseTask {
     @Column(name = "assertion_points", nullable = false, precision = 7, scale = 2)
     private BigDecimal assertionPoints;
 
-    @NotNull
-    @Column(name = "whitelist", nullable = false, columnDefinition = "text")
+    @Column(name = "whitelist", columnDefinition = "text")
     private String whitelist;
+
+    @NotNull
+    @Column(name = "generated_whitelist", nullable = false, columnDefinition = "text")
+    private String generatedWhitelist;
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SQLDDLCheckConstraint> checkConstraints = new ArrayList<>();
@@ -74,6 +77,7 @@ public class SQLDDLTask extends BaseTask {
         BigDecimal constraintPoints,
         BigDecimal assertionPoints,
         String whitelist,
+        String generatedWhitelist,
         List<SQLDDLCheckConstraint> checkConstraints,
         List<SQLDDLAssertion> assertions
     ) {
@@ -86,6 +90,7 @@ public class SQLDDLTask extends BaseTask {
         this.constraintPoints = constraintPoints;
         this.assertionPoints = assertionPoints;
         this.whitelist = whitelist;
+        this.generatedWhitelist = generatedWhitelist;
         this.checkConstraints = checkConstraints;
         this.assertions = assertions;
     }
@@ -152,6 +157,14 @@ public class SQLDDLTask extends BaseTask {
 
     public void setWhitelist(String whitelist) {
         this.whitelist = whitelist;
+    }
+
+    public String getGeneratedWhitelist() {
+        return generatedWhitelist;
+    }
+
+    public void setGeneratedWhitelist(String generatedWhitelist) {
+        this.generatedWhitelist = generatedWhitelist;
     }
 
     public List<SQLDDLCheckConstraint> getCheckConstraints() {
