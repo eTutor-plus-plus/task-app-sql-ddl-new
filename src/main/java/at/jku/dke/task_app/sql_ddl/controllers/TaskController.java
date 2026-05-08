@@ -38,6 +38,7 @@ public class TaskController extends BaseTaskController<SQLDDLTask, SQLDDLTaskDto
             task.getConstraintPoints(),
             task.getAssertionPoints(),
             task.getWhitelist(),
+            task.getGeneratedWhitelist(),
             mapStatements(task.getCheckConstraints()),
             mapAssertions(task.getAssertions())
         );

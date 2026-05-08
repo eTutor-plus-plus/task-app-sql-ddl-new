@@ -19,6 +19,7 @@ public record SQLDDLTaskDto(
     @NotNull BigDecimal constraintPoints,
     BigDecimal assertionPoints,
     String whitelist,
+    String generatedWhitelist,
     List<SQLDDLCheckConstraintDto> insertStatements,
     List<SQLDDLAssertionDto> assertionStatements
 ) implements Serializable {}
