@@ -1,6 +1,7 @@
 package at.jku.dke.task_app.sql_ddl.evaluation;
 
 import at.jku.dke.etutor.task_app.dto.GradingDto;
+import at.jku.dke.etutor.task_app.dto.SubmissionMode;
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLAssertion;
 import at.jku.dke.task_app.sql_ddl.data.entities.SQLDDLCheckConstraint;
@@ -98,14 +99,40 @@ public class EvaluationService {
             .orElseThrow(() -> new EntityNotFoundException("Task " + submission.taskId() + " does not exist."));
 
         LOG.info("Evaluating input for task {} with mode {} and feedback-level {}", submission.taskId(), submission.mode(), submission.feedbackLevel());
-        EvaluationExecutionResult executionResult = executeSubmission(task, submission.submission().input());
-        EvaluationResult evaluationResult = evaluateWithTask(task, executionResult, submission.submission().input());
+        boolean syntaxOnlyRun = submission.mode() == SubmissionMode.RUN;
+        EvaluationExecutionResult executionResult = executeSubmission(task, submission.submission().input(), !syntaxOnlyRun);
+        EvaluationResult evaluationResult = syntaxOnlyRun
+            ? evaluateRun(executionResult, task, submission.submission().input())
+            : evaluateWithTask(task, executionResult, submission.submission().input());
         return feedbackService.toGrading(
             task,
             Locale.of(submission.language()),
             evaluationResult,
             submission.feedbackLevel(),
             submission.mode()
+        );
+    }
+
+    private EvaluationResult evaluateRun(EvaluationExecutionResult executionResult, SQLDDLTask task, String submissionInput) {
+        List<String> whitelistViolations = whitelistWordService.findWhitelistViolations(task.getGeneratedWhitelist(), submissionInput);
+        List<CriterionEvaluation> criteria = List.of(new CriterionEvaluation(
+            "criterium.syntax",
+            null,
+            executionResult.syntaxValid(),
+            new SyntaxFeedbackDetail(executionResult.errorMessage())
+        ));
+
+        return new EvaluationResult(
+            executionResult.syntaxValid(),
+            executionResult.errorMessage(),
+            roundPoints(BigDecimal.ZERO),
+            false,
+            executionResult.syntaxValid() ? "run.syntax.valid" : "run.syntax.invalid",
+            whitelistViolations,
+            criteria,
+            List.of(),
+            List.of(),
+            List.of()
         );
     }
 
@@ -371,7 +398,7 @@ public class EvaluationService {
         return points.setScale(OUTPUT_SCALE, RoundingMode.HALF_UP);
     }
 
-    EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl) {
+    EvaluationExecutionResult executeSubmission(SQLDDLTask task, String ddl, boolean includeSemanticChecks) {
         PreprocessingResult preprocessingResult = assertionScriptPreprocessor.preprocess(ddl);
         if (!preprocessingResult.errors().isEmpty()) {
             String errorMessage = String.join(" ", preprocessingResult.errors());
@@ -381,6 +408,10 @@ public class EvaluationService {
 
         try (Connection connection = connectionManager.openForSubmission(task.getId())) {
             RunScript.execute(connection, new StringReader(preprocessingResult.sanitizedDdl()));
+            if (!includeSemanticChecks) {
+                return new EvaluationExecutionResult(true, null, null, List.of(), List.of(), List.of());
+            }
+
             JsonNode schemaMetadata = schemaMetadataExtractor.extract(connection, "PUBLIC");
             List<CheckConstraintResult> checkConstraintResults = evaluateCheckConstraints(task.getCheckConstraints(), connection);
             AssertionEvaluationOutcome assertionOutcome = evaluateAssertions(task.getAssertions(), preprocessingResult, connection);
