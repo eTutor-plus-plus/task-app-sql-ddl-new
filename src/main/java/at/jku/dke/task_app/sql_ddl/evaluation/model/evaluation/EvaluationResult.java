@@ -1,6 +1,5 @@
 package at.jku.dke.task_app.sql_ddl.evaluation.model.evaluation;
 
-import at.jku.dke.task_app.sql_ddl.evaluation.model.assertion.AssertionResult;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.CriterionCountSummary;
 import at.jku.dke.task_app.sql_ddl.evaluation.model.feedback.CriterionEvaluation;
 
@@ -17,8 +16,6 @@ import java.util.List;
  * @param whitelistViolations     Distinct submission words that are not part of the task whitelist.
  * @param criteria                Evaluated criteria in display order.
  * @param criterionCountSummaries Coarse summaries for feedback level 2.
- * @param assertionResults        The evaluated assertion results.
- * @param assertionErrors         Assertion preprocessing or matching errors.
  */
 public record EvaluationResult(
     boolean syntaxValid,
@@ -28,8 +25,6 @@ public record EvaluationResult(
     String generalFeedbackKey,
     List<String> whitelistViolations,
     List<CriterionEvaluation> criteria,
-    List<CriterionCountSummary> criterionCountSummaries,
-    List<AssertionResult> assertionResults,
-    List<String> assertionErrors
+    List<CriterionCountSummary> criterionCountSummaries
 ) {
 }

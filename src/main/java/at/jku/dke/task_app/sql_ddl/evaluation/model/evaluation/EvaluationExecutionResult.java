@@ -14,14 +14,12 @@ import java.util.List;
  * @param schemaMetadata         The extracted schema metadata.
  * @param checkConstraintResults The evaluated check constraint results.
  * @param assertionResults       The evaluated assertion results.
- * @param assertionErrors        Assertion preprocessing or matching errors.
  */
 public record EvaluationExecutionResult(
     boolean syntaxValid,
     String errorMessage,
     JsonNode schemaMetadata,
     List<CheckConstraintResult> checkConstraintResults,
-    List<AssertionResult> assertionResults,
-    List<String> assertionErrors
+    List<AssertionResult> assertionResults
 ) {
 }

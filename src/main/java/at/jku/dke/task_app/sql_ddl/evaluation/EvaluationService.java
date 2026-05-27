@@ -130,8 +130,6 @@ public class EvaluationService {
             executionResult.syntaxValid() ? "run.syntax.valid" : "run.syntax.invalid",
             whitelistViolations,
             criteria,
-            List.of(),
-            List.of(),
             List.of()
         );
     }
@@ -168,9 +166,7 @@ public class EvaluationService {
                     new CriterionCountSummary("criterium.foreignkey", false, 0, 0, null),
                     new CriterionCountSummary("criterium.constraint", false, 0, 0, null),
                     new CriterionCountSummary("criterium.assertion", false, 0, 0, null)
-                ),
-                List.of(),
-                List.of()
+                )
             );
         }
 
@@ -274,8 +270,7 @@ public class EvaluationService {
             roundPoints(constraintPoints)
         ));
 
-        boolean assertionsMatch = executionResult.assertionErrors().isEmpty()
-            && executionResult.assertionResults().stream().allMatch(AssertionResult::passed);
+        boolean assertionsMatch = executionResult.assertionResults().stream().allMatch(AssertionResult::passed);
         int matchingAssertions = (int) executionResult.assertionResults().stream()
             .filter(AssertionResult::passed)
             .count();
@@ -285,8 +280,7 @@ public class EvaluationService {
             assertionsMatch,
             matchingAssertions,
             task.getAssertionPoints(),
-            executionResult.assertionResults(),
-            executionResult.assertionErrors()
+            executionResult.assertionResults()
         );
         points = points.add(assertionPoints);
         criterionCountSummaries.add(new CriterionCountSummary(
@@ -306,9 +300,7 @@ public class EvaluationService {
             solved ? "correct" : "incorrect",
             whitelistViolations,
             criteria,
-            criterionCountSummaries,
-            executionResult.assertionResults(),
-            executionResult.assertionErrors()
+            criterionCountSummaries
         );
     }
 
@@ -369,15 +361,14 @@ public class EvaluationService {
         boolean passed,
         int matchedAssertions,
         BigDecimal points,
-        List<AssertionResult> assertionResults,
-        List<String> assertionErrors
+        List<AssertionResult> assertionResults
     ) {
         BigDecimal awardedPoints = calculateAssertionPoints(points, matchedAssertions);
         criteria.add(new CriterionEvaluation(
             "criterium.assertion",
             roundPoints(awardedPoints),
             passed,
-            new AssertionFeedbackDetail(assertionResults, assertionErrors)
+            new AssertionFeedbackDetail(assertionResults)
         ));
         return awardedPoints;
     }
@@ -407,13 +398,13 @@ public class EvaluationService {
         if (!preprocessingResult.errors().isEmpty()) {
             String errorMessage = String.join(" ", preprocessingResult.errors());
             LOG.info("Assertion preprocessing failed for task {}: {}", task.getId(), errorMessage);
-            return new EvaluationExecutionResult(false, errorMessage, null, List.of(), List.of(), List.of());
+            return new EvaluationExecutionResult(false, errorMessage, null, List.of(), List.of());
         }
 
         try (Connection connection = connectionManager.openForSubmission(task.getId())) {
             RunScript.execute(connection, new StringReader(preprocessingResult.sanitizedDdl()));
             if (!includeSemanticChecks) {
-                return new EvaluationExecutionResult(true, null, null, List.of(), List.of(), List.of());
+                return new EvaluationExecutionResult(true, null, null, List.of(), List.of());
             }
 
             JsonNode schemaMetadata = schemaMetadataExtractor.extract(connection, "PUBLIC");
@@ -424,12 +415,11 @@ public class EvaluationService {
                 null,
                 schemaMetadata,
                 checkConstraintResults,
-                assertionOutcome.results(),
-                assertionOutcome.errors()
+                assertionOutcome.results()
             );
         } catch (SQLException ex) {
             LOG.info("DDL execution failed for task {}: {}", task.getId(), ex.getMessage());
-            return new EvaluationExecutionResult(false, ex.getMessage(), null, List.of(), List.of(), List.of());
+            return new EvaluationExecutionResult(false, ex.getMessage(), null, List.of(), List.of());
         }
     }
 
@@ -439,7 +429,7 @@ public class EvaluationService {
         Connection connection
     ) throws SQLException {
         if (expectedAssertions == null || expectedAssertions.isEmpty()) {
-            return new AssertionEvaluationOutcome(List.of(), List.of());
+            return new AssertionEvaluationOutcome(List.of());
         }
 
         Map<String, ExtractedAssertion> submissionAssertions = new LinkedHashMap<>();
@@ -463,7 +453,7 @@ public class EvaluationService {
             results.add(new AssertionResult(name, evaluateAssertion(expectedAssertion, submissionAssertion, connection)));
         }
 
-        return new AssertionEvaluationOutcome(results, preprocessingResult.errors());
+        return new AssertionEvaluationOutcome(results);
     }
 
     private List<CheckConstraintResult> evaluateCheckConstraints(List<SQLDDLCheckConstraint> checkConstraints, Connection connection) throws SQLException {
@@ -592,8 +582,7 @@ public class EvaluationService {
     }
 
     private record AssertionEvaluationOutcome(
-        List<AssertionResult> results,
-        List<String> errors
+        List<AssertionResult> results
     ) {
     }
 }

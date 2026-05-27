@@ -8,10 +8,8 @@ import java.util.List;
  * Contains assertion evaluation details.
  *
  * @param assertionResults The evaluated assertions.
- * @param preprocessingErrors Assertion preprocessing errors found in the submission.
  */
 public record AssertionFeedbackDetail(
-    List<AssertionResult> assertionResults,
-    List<String> preprocessingErrors
+    List<AssertionResult> assertionResults
 ) implements CriterionFeedbackDetail {
 }
