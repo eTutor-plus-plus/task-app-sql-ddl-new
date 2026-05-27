@@ -44,7 +44,7 @@ public class WhitelistWordService {
         return WORD_SEPARATOR.splitAsStream(input)
             .filter(word -> !word.isBlank())
             .filter(word -> !NUMERIC_WORD.matcher(word).matches())
-            .map(String::toLowerCase)
+            .map(String::toUpperCase)
             .distinct()
             .toList();
     }
