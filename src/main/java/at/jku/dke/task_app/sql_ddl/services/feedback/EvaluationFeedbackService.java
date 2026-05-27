@@ -86,7 +86,12 @@ public class EvaluationFeedbackService {
                     evaluationResult.points(),
                     buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
                     evaluationResult.criteria().stream()
-                        .map(criterion -> new CriterionDto(getMessage(criterion.key(), locale), criterion.awardedPoints(), criterion.passed(), ""))
+                        .map(criterion -> new CriterionDto(
+                            getMessage(criterion.key(), locale),
+                            criterion.awardedPoints(),
+                            criterion.passed(),
+                            buildLevel1Feedback(locale, criterion)
+                        ))
                         .toList()
                 );
             case 2:
@@ -96,7 +101,7 @@ public class EvaluationFeedbackService {
                     getMessage(syntaxCriterion.key(), locale),
                     null,
                     syntaxCriterion.passed(),
-                    getMessage("feedback.level2.criterion.summary", locale, syntaxCriterion.passed() ? 1 : 0, 1)
+                    buildLevel2SyntaxFeedback(locale, syntaxCriterion)
                 ));
 
                 for (CriterionCountSummary summary : evaluationResult.criterionCountSummaries()) {
@@ -145,6 +150,23 @@ public class EvaluationFeedbackService {
         return getMessage(generalFeedbackKey, locale) + HTML_LINE_BREAK + whitelistMessage;
     }
 
+    private String buildLevel1Feedback(Locale locale, CriterionEvaluation criterion) {
+        if (criterion.feedbackDetail() instanceof SyntaxFeedbackDetail && !criterion.passed()) {
+            return buildDetailedFeedback(locale, criterion);
+        }
+
+        return "";
+    }
+
+    private String buildLevel2SyntaxFeedback(Locale locale, CriterionEvaluation syntaxCriterion) {
+        String summary = getMessage("feedback.level2.criterion.summary", locale, syntaxCriterion.passed() ? 1 : 0, 1);
+        if (!syntaxCriterion.passed()) {
+            return summary + HTML_LINE_BREAK + buildDetailedFeedback(locale, syntaxCriterion);
+        }
+
+        return summary;
+    }
+
     private String buildDetailedFeedback(Locale locale, CriterionEvaluation criterion) {
         switch (criterion.feedbackDetail()) {
             case SyntaxFeedbackDetail detail:
@@ -160,6 +182,7 @@ public class EvaluationFeedbackService {
                 int unsuccessfulCriterionCount = detail.unsuccessfulEntries() == null ? 0 : detail.unsuccessfulEntries().size();
                 return buildSuccessFailureFeedback(
                     locale,
+                    detail.totalEntries(),
                     successfulCriterionCount,
                     successfulCriterion,
                     unsuccessfulCriterionCount,
@@ -242,6 +265,7 @@ public class EvaluationFeedbackService {
 
     private String buildSuccessFailureFeedback(
         Locale locale,
+        int totalCount,
         int successfulCount,
         String successfulEntries,
         int unsuccessfulCount,
@@ -254,7 +278,7 @@ public class EvaluationFeedbackService {
             ? getMessage("criterium.details.empty", locale)
             : unsuccessfulEntries;
 
-        return getMessage("criterium.details.total", locale, successfulCount + unsuccessfulCount)
+        return getMessage("criterium.details.total", locale, totalCount)
             + HTML_LINE_BREAK
             + getMessage("criterium.details.successful", locale, successfulCount, successful)
             + HTML_LINE_BREAK

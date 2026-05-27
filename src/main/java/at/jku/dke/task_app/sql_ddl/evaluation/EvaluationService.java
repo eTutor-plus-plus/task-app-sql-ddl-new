@@ -187,6 +187,7 @@ public class EvaluationService {
             tablesMatch,
             task.getTablePoints(),
             matchingTables,
+            expectedTables,
             schemaComparisonService.matchingTableNames(expected, actual),
             schemaComparisonService.mismatchingTableNames(expected, actual)
         );
@@ -208,6 +209,7 @@ public class EvaluationService {
             primaryKeyMatch,
             task.getPrimaryKeyPoints(),
             matchingPrimaryKeys,
+            expectedPrimaryKeys,
             schemaComparisonService.matchingPrimaryKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingPrimaryKeyTableNames(expected, actual)
         );
@@ -230,6 +232,7 @@ public class EvaluationService {
             foreignKeyMatch,
             task.getForeignKeyPoints(),
             matchingForeignKeys,
+            expectedForeignKeys,
             schemaComparisonService.matchingForeignKeyTableNames(expected, actual),
             schemaComparisonService.mismatchingForeignKeyTableNames(expected, actual)
         );
@@ -324,6 +327,7 @@ public class EvaluationService {
         boolean passed,
         BigDecimal points,
         int matched,
+        int totalExpectedEntries,
         List<String> successfulEntries,
         List<String> unsuccessfulEntries
     ) {
@@ -332,7 +336,7 @@ public class EvaluationService {
             criterionNameKey,
             roundPoints(awardedPoints),
             passed,
-            new ComparisonFeedbackDetail(successfulEntries, unsuccessfulEntries)
+            new ComparisonFeedbackDetail(successfulEntries, unsuccessfulEntries, totalExpectedEntries)
         ));
         return awardedPoints;
     }

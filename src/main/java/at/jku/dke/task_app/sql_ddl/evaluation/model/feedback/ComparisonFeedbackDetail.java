@@ -7,9 +7,11 @@ import java.util.List;
  *
  * @param successfulEntries   The entries that matched.
  * @param unsuccessfulEntries The entries that did not match.
+ * @param totalEntries        The number of expected entries that can contribute points.
  */
 public record ComparisonFeedbackDetail(
     List<String> successfulEntries,
-    List<String> unsuccessfulEntries
+    List<String> unsuccessfulEntries,
+    int totalEntries
 ) implements CriterionFeedbackDetail {
 }
