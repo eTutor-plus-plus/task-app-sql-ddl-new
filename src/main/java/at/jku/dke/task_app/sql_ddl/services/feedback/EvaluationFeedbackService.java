@@ -77,7 +77,7 @@ public class EvaluationFeedbackService {
                 return new GradingDto(
                     task.getMaxPoints(),
                     evaluationResult.points(),
-                    buildGeneralFeedback(locale, evaluationResult.generalFeedbackKey(), evaluationResult.whitelistViolations()),
+                    buildLevel0Feedback(locale, evaluationResult),
                     List.of()
                 );
             case 1:
@@ -142,12 +142,29 @@ public class EvaluationFeedbackService {
     }
 
     private String buildGeneralFeedback(Locale locale, String generalFeedbackKey, List<String> whitelistViolations) {
-        String whitelistMessage = "";
+        List<String> feedbackParts = new ArrayList<>();
+        feedbackParts.add(getMessage(generalFeedbackKey, locale));
+
         if (whitelistViolations != null && !whitelistViolations.isEmpty()) {
-            whitelistMessage = getMessage("feedback.whitelist.invalid", locale, String.join(", ", whitelistViolations));
+            feedbackParts.add(getMessage("feedback.whitelist.invalid", locale, String.join(", ", whitelistViolations)));
         }
 
-        return getMessage(generalFeedbackKey, locale) + HTML_LINE_BREAK + whitelistMessage;
+        return String.join(HTML_LINE_BREAK, feedbackParts);
+    }
+
+    private String buildLevel0Feedback(Locale locale, EvaluationResult evaluationResult) {
+        List<String> feedbackParts = new ArrayList<>();
+        feedbackParts.add(getMessage(evaluationResult.generalFeedbackKey(), locale));
+
+        if (!evaluationResult.syntaxValid()) {
+            feedbackParts.add(buildDetailedFeedback(locale, getSyntaxCriterion(evaluationResult)));
+        }
+
+        if (evaluationResult.whitelistViolations() != null && !evaluationResult.whitelistViolations().isEmpty()) {
+            feedbackParts.add(getMessage("feedback.whitelist.invalid", locale, String.join(", ", evaluationResult.whitelistViolations())));
+        }
+
+        return String.join(HTML_LINE_BREAK, feedbackParts);
     }
 
     private String buildLevel1Feedback(Locale locale, CriterionEvaluation criterion) {
