@@ -229,8 +229,8 @@ public class EvaluationService {
             task.getForeignKeyPoints(),
             matchingForeignKeys,
             expectedForeignKeys,
-            schemaComparisonService.matchingForeignKeyTableNames(expected, actual),
-            schemaComparisonService.mismatchingForeignKeyTableNames(expected, actual)
+            schemaComparisonService.matchingForeignKeyDescriptions(expected, actual),
+            schemaComparisonService.mismatchingForeignKeyDescriptions(expected, actual)
         );
         points = points.add(foreignKeyPoints);
         criterionCountSummaries.add(new CriterionCountSummary(

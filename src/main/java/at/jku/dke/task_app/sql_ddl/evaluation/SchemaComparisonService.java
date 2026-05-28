@@ -3,9 +3,11 @@ package at.jku.dke.task_app.sql_ddl.evaluation;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -34,7 +36,7 @@ public class SchemaComparisonService {
     }
 
     public boolean foreignKeysMatch(JsonNode expectedSchema, JsonNode actualSchema) {
-        return extractForeignKeys(expectedSchema).equals(extractForeignKeys(actualSchema));
+        return extractForeignKeys(expectedSchema).keySet().equals(extractForeignKeys(actualSchema).keySet());
     }
 
     public boolean uniqueConstraintsMatch(JsonNode expectedSchema, JsonNode actualSchema) {
@@ -78,11 +80,11 @@ public class SchemaComparisonService {
     }
 
     public int countMatchingForeignKeys(JsonNode expectedSchema, JsonNode actualSchema) {
-        Set<String> expected = extractForeignKeys(expectedSchema);
-        Set<String> actual = extractForeignKeys(actualSchema);
+        SortedMap<String, String> expected = extractForeignKeys(expectedSchema);
+        SortedMap<String, String> actual = extractForeignKeys(actualSchema);
         int matches = 0;
-        for (String entry : expected) {
-            if (actual.contains(entry)) {
+        for (String entry : expected.keySet()) {
+            if (actual.containsKey(entry)) {
                 matches++;
             }
         }
@@ -125,12 +127,33 @@ public class SchemaComparisonService {
         return mismatchingKeys(extractPrimaryKeys(expectedSchema), extractPrimaryKeys(actualSchema));
     }
 
-    public List<String> matchingForeignKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
-        return matchingKeys(extractForeignKeysByTable(expectedSchema), extractForeignKeysByTable(actualSchema));
+    public List<String> matchingForeignKeyDescriptions(JsonNode expectedSchema, JsonNode actualSchema) {
+        SortedMap<String, String> expected = extractForeignKeys(expectedSchema);
+        SortedMap<String, String> actual = extractForeignKeys(actualSchema);
+        return expected.entrySet().stream()
+            .filter(entry -> actual.containsKey(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .toList();
     }
 
-    public List<String> mismatchingForeignKeyTableNames(JsonNode expectedSchema, JsonNode actualSchema) {
-        return mismatchingKeys(extractForeignKeysByTable(expectedSchema), extractForeignKeysByTable(actualSchema));
+    public List<String> mismatchingForeignKeyDescriptions(JsonNode expectedSchema, JsonNode actualSchema) {
+        SortedMap<String, String> expected = extractForeignKeys(expectedSchema);
+        SortedMap<String, String> actual = extractForeignKeys(actualSchema);
+        SortedMap<String, String> mismatches = new TreeMap<>();
+
+        expected.forEach((key, value) -> {
+            if (!actual.containsKey(key)) {
+                mismatches.put(key, value);
+            }
+        });
+
+        actual.forEach((key, value) -> {
+            if (!expected.containsKey(key)) {
+                mismatches.put(key, value);
+            }
+        });
+
+        return List.copyOf(mismatches.values());
     }
 
     private Map<String, Set<String>> extractTablesWithColumns(JsonNode schemaNode) {
@@ -152,25 +175,6 @@ public class SchemaComparisonService {
         return result;
     }
 
-    private Map<String, Set<String>> extractForeignKeysByTable(JsonNode schemaNode) {
-        Map<String, Set<String>> result = new HashMap<>();
-        for (JsonNode table : safeArray(schemaNode.path("tables"))) {
-            String tableName = table.path("name").asText("");
-            Set<String> descriptors = new TreeSet<>();
-            for (JsonNode fk : safeArray(table.path("foreignKeys"))) {
-                String descriptor = String.join("|",
-                    fk.path("column").asText(""),
-                    fk.path("referencedTable").asText(""),
-                    fk.path("referencedColumn").asText(""),
-                    fk.path("updateRule").asText(""),
-                    fk.path("deleteRule").asText(""));
-                descriptors.add(descriptor);
-            }
-            result.put(tableName, descriptors);
-        }
-        return result;
-    }
-
     private Map<String, Set<String>> extractPrimaryKeys(JsonNode schemaNode) {
         Map<String, Set<String>> result = new HashMap<>();
         for (JsonNode table : safeArray(schemaNode.path("tables"))) {
@@ -184,20 +188,11 @@ public class SchemaComparisonService {
         return result;
     }
 
-    private Set<String> extractForeignKeys(JsonNode schemaNode) {
-        Set<String> result = new TreeSet<>();
+    private SortedMap<String, String> extractForeignKeys(JsonNode schemaNode) {
+        SortedMap<String, String> result = new TreeMap<>();
         for (JsonNode table : safeArray(schemaNode.path("tables"))) {
             String tableName = table.path("name").asText("");
-            for (JsonNode fk : safeArray(table.path("foreignKeys"))) {
-                String descriptor = String.join("|",
-                    tableName,
-                    fk.path("column").asText(""),
-                    fk.path("referencedTable").asText(""),
-                    fk.path("referencedColumn").asText(""),
-                    fk.path("updateRule").asText(""),
-                    fk.path("deleteRule").asText(""));
-                result.add(descriptor);
-            }
+            result.putAll(extractForeignKeys(tableName, table.path("foreignKeys")));
         }
         return result;
     }
@@ -223,7 +218,7 @@ public class SchemaComparisonService {
         if (node == null || !node.isArray()) {
             return Collections.emptyList();
         }
-        return () -> node.elements();
+        return node::elements;
     }
 
     private List<String> matchingKeys(Map<String, Set<String>> expected, Map<String, Set<String>> actual) {
@@ -245,5 +240,116 @@ public class SchemaComparisonService {
         expected.keySet().forEach(key -> keys.put(key, Set.of()));
         actual.keySet().forEach(key -> keys.put(key, Set.of()));
         return keys;
+    }
+
+    private boolean isGroupedForeignKeyNode(JsonNode foreignKey) {
+        return foreignKey.path("columns").isArray() && foreignKey.path("referencedColumns").isArray();
+    }
+
+    private SortedMap<String, String> extractForeignKeys(String tableName, JsonNode foreignKeysNode) {
+        SortedMap<String, String> result = new TreeMap<>();
+        Map<String, List<String>> groupedColumnPairs = new LinkedHashMap<>();
+        Map<String, String> groupedReferencedTables = new HashMap<>();
+        Map<String, String> groupedUpdateRules = new HashMap<>();
+        Map<String, String> groupedDeleteRules = new HashMap<>();
+        int syntheticForeignKeyIndex = 0;
+
+        for (JsonNode fk : safeArray(foreignKeysNode)) {
+            if (isGroupedForeignKeyNode(fk)) {
+                List<String> columnPairs = zipColumnPairs(fk.path("columns"), fk.path("referencedColumns"));
+                String normalizedKey = buildForeignKeyKey(
+                    tableName,
+                    fk.path("referencedTable").asText(""),
+                    fk.path("updateRule").asText(""),
+                    fk.path("deleteRule").asText(""),
+                    columnPairs
+                );
+                result.put(normalizedKey, buildForeignKeyDisplay(tableName, columnPairs));
+                continue;
+            }
+
+            String foreignKeyName = fk.path("name").asText("");
+            String groupKey = foreignKeyName.isBlank()
+                ? "synthetic-" + syntheticForeignKeyIndex++
+                : foreignKeyName;
+            groupedColumnPairs.computeIfAbsent(groupKey, ignored -> new ArrayList<>())
+                .add(joinColumnPair(fk.path("column").asText(""), fk.path("referencedColumn").asText("")));
+            groupedReferencedTables.putIfAbsent(groupKey, fk.path("referencedTable").asText(""));
+            groupedUpdateRules.putIfAbsent(groupKey, fk.path("updateRule").asText(""));
+            groupedDeleteRules.putIfAbsent(groupKey, fk.path("deleteRule").asText(""));
+        }
+
+        groupedColumnPairs.forEach((groupKey, columnPairs) -> {
+            String normalizedKey = buildForeignKeyKey(
+                tableName,
+                groupedReferencedTables.getOrDefault(groupKey, ""),
+                groupedUpdateRules.getOrDefault(groupKey, ""),
+                groupedDeleteRules.getOrDefault(groupKey, ""),
+                columnPairs
+            );
+            result.put(normalizedKey, buildForeignKeyDisplay(tableName, columnPairs));
+        });
+
+        return result;
+    }
+
+    private List<String> readColumns(JsonNode columnsNode) {
+        List<String> columns = new ArrayList<>();
+        for (JsonNode column : safeArray(columnsNode)) {
+            columns.add(column.asText(""));
+        }
+        return columns;
+    }
+
+    private List<String> zipColumnPairs(JsonNode columnsNode, JsonNode referencedColumnsNode) {
+        List<String> columns = readColumns(columnsNode);
+        List<String> referencedColumns = readColumns(referencedColumnsNode);
+        List<String> columnPairs = new ArrayList<>();
+        int pairCount = Math.min(columns.size(), referencedColumns.size());
+
+        for (int i = 0; i < pairCount; i++) {
+            columnPairs.add(joinColumnPair(columns.get(i), referencedColumns.get(i)));
+        }
+
+        return columnPairs;
+    }
+
+    private String buildForeignKeyKey(
+        String tableName,
+        String referencedTable,
+        String updateRule,
+        String deleteRule,
+        List<String> columnPairs
+    ) {
+        List<String> sortedPairs = columnPairs.stream()
+            .sorted()
+            .toList();
+        return String.join("|",
+            tableName,
+            String.join(",", sortedPairs),
+            referencedTable,
+            updateRule,
+            deleteRule
+        );
+    }
+
+    private String buildForeignKeyDisplay(String tableName, List<String> columnPairs) {
+        List<String> sortedColumns = columnPairs.stream()
+            .sorted()
+            .map(this::extractForeignKeyColumn)
+            .toList();
+        return tableName + "(" + String.join(", ", sortedColumns) + ")";
+    }
+
+    private String joinColumnPair(String column, String referencedColumn) {
+        return column + "|" + referencedColumn;
+    }
+
+    private String extractForeignKeyColumn(String columnPair) {
+        int separatorIndex = columnPair.indexOf('|');
+        if (separatorIndex < 0) {
+            return columnPair;
+        }
+        return columnPair.substring(0, separatorIndex);
     }
 }
