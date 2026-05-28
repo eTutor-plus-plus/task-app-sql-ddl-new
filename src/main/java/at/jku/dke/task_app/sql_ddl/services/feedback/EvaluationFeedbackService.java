@@ -193,17 +193,15 @@ public class EvaluationFeedbackService {
             case BlockedBySyntaxFeedbackDetail ignored:
                 return getMessage("criterium.blockedBySyntax", locale);
             case ComparisonFeedbackDetail detail:
-                String successfulCriterion = detail.successfulEntries() == null ? "" : String.join(", ", detail.successfulEntries());
-                String unsuccessfulCriterion = detail.unsuccessfulEntries() == null ? "" : String.join(", ", detail.unsuccessfulEntries());
-                int successfulCriterionCount = detail.successfulEntries() == null ? 0 : detail.successfulEntries().size();
-                int unsuccessfulCriterionCount = detail.unsuccessfulEntries() == null ? 0 : detail.unsuccessfulEntries().size();
+                List<String> successfulEntries = distinctEntriesForDisplay(detail.successfulEntries());
+                List<String> unsuccessfulEntries = distinctEntriesForDisplay(detail.unsuccessfulEntries());
                 return buildSuccessFailureFeedback(
                     locale,
                     detail.totalEntries(),
-                    successfulCriterionCount,
-                    successfulCriterion,
-                    unsuccessfulCriterionCount,
-                    unsuccessfulCriterion
+                    successfulEntries.size(),
+                    String.join(", ", successfulEntries),
+                    unsuccessfulEntries.size(),
+                    String.join(", ", unsuccessfulEntries)
                 );
             case ConstraintFeedbackDetail detail:
                 List<CheckConstraintResult> checkConstraintResults = detail.checkConstraintResults() == null
@@ -320,6 +318,16 @@ public class EvaluationFeedbackService {
             + getMessage("criterium.assertion.details.successful", locale, successful)
             + HTML_LINE_BREAK
             + getMessage("criterium.assertion.details.unsuccessful", locale, unsuccessful);
+    }
+
+    private List<String> distinctEntriesForDisplay(List<String> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+
+        return entries.stream()
+            .distinct()
+            .toList();
     }
 
     private CriterionEvaluation getSyntaxCriterion(EvaluationResult evaluationResult) {
